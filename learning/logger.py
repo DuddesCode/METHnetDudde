@@ -103,7 +103,7 @@ class Accuracy_Logger(object):
         return acc, correct, count
 
 class EarlyStopping:
-    """ Class to compute wheter Early Stopping should be applied
+    """ Class to compute wheter Early Stopping should be applied => stops if not better eresult was achieved after the current epoch
 
     Attributes
     ----------

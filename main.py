@@ -5,7 +5,7 @@ import arguments.setting as setting
 import datastructure.dataset as dataset
 import os
 
-from learning.construct_features import construct_features
+from learning.partial_training import construct_features
 from progress.bar import IncrementalBar
 import learning.train
 import learning.test
@@ -39,8 +39,8 @@ def run(data, setting, train=False, features_only=False, runs_start=0, runs=10, 
     print("_-----")
     # Create features
     construct_features(data.get_train_set(), setting)
-    construct_features(data.get_validation_set(), setting)
-    construct_features(data.get_test_set(), setting)
+    #construct_features(data.get_validation_set(), setting)
+    #construct_features(data.get_test_set(), setting)
 
     if features_only:
         return
