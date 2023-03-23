@@ -22,6 +22,8 @@ class Tile(object):
         A list of floats with the attention values obtained in multiple runs
     attention_values_relative : list [float]
         A list of floats with the relative attention values obtained in multiple runs
+    mark : boolean
+        A boolean that defines whether the Tile is marked or not MD
     Methods
     -------
     get_image(wsi, augment=True)
@@ -38,6 +40,10 @@ class Tile(object):
         Getter attention_values attribute
     get_attention_values_relative()
         Getter attention_values_relative attribute
+    get_mark()
+        Getter for mark attribute MD
+    set_mark(marking : [bool])
+        Setter for the mark attribute MD
     """
     def __init__(self, x, y, size, input_size, augmentation, level):
         """
@@ -71,6 +77,9 @@ class Tile(object):
         self.attention_values = []
         # Relative attention values for this tile
         self.attention_values_relative = []
+        
+        #used for selection for partial training MD
+        self.mark = False
 
     def get_image(self, wsi, augment=True):
         """ Return Tiles image content
@@ -99,7 +108,7 @@ class Tile(object):
         # If augmentation should be performed apply augmentation sequence
         if augment:
             img = self.augmentation(image=img)['image']
-        return img
+        return img, self.mark
 
     def get_position(self):
         """ Getter position attribute
@@ -154,3 +163,21 @@ class Tile(object):
             list of stored relative attention values for this Tile
         """
         return self.attention_values_relative
+
+    def get_mark(self):
+        """ Getter for the mark attribute
+        Returns
+        --------
+        boolean
+            mark value
+        MD"""
+        return self.mark
+
+    def set_mark(self, marking):
+        """ Setter for the mark attribute
+        Parameters
+        -----------
+        marking boolean
+            value to set mark to
+        MD"""
+        self.mark = marking

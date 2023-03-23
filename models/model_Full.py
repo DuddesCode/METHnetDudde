@@ -2,10 +2,10 @@
 import torch.nn as nn
 
 class Partial_Net(nn.Module):
-    def __init__(self, model_enc, model_dec) -> None:
+    def __init__(self, encoder, decoder) -> None:
         super(Partial_Net, self).__init__()
-        self.alpha = model_enc
-        self.beta = model_dec
+        self.alpha = encoder
+        self.beta = decoder
 
     def forward(self, x):
         x = self.alpha(x)
@@ -17,4 +17,5 @@ class Partial_Net(nn.Module):
 
     def getDecoder(self):
         return self.beta
+
 

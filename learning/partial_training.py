@@ -14,6 +14,8 @@ from learning.logger import EarlyStopping, Accuracy_Logger
 from .train import calculate_error
 import sys
 from tqdm import tqdm
+import copy
+from utils.helper import compare_models
 
 class Patient_Dataset(Dataset):
     """
@@ -115,14 +117,15 @@ def construct_features(patients, setting, fold):
     feature_setting = setting.get_feature_setting()
     # Get Encoder - default pretrained ResNet50
     param_Encoder = resnet50_baseline(pretrained=True)
+    param_Encoder.train()
     # Get Decoder
     param_Decoder = Attention_MB(setting)
+    param_Decoder.train()
     # get Partial Model
     model = Partial_Net(encoder=param_Encoder, decoder=param_Decoder)
     # To GPU if available
     print(torch.cuda.is_available())
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    print(device)
     model.to(device)
     # Loss function
     loss_fn = torch.nn.CrossEntropyLoss()
@@ -141,16 +144,26 @@ def construct_features(patients, setting, fold):
     #Track progress
         
         print('at bar')
-        torch.backends.cudnn.enabled = True
         # Iterate patient classes
         for patient in patients:
             # Iterate patients in class
             for p in patient:
                 # Iterate image properties
+                print(device)
                 label = p.get_diagnosis().get_label()
+                if label == 0:
+                    label = torch.zeros(1)
+                    label = label.to(device)
+                    print(label.device)
+                else:
+                    label = torch.ones(1)
+                    label = label.to(device)
+                    print(label.device)
+                
                 for wp in p.get_wsis():
                     # Iterate WSIs with image property
                     for wsi in wp:
+                        
                         # Iterate Tile properties
                         bar_wsi = IncrementalBar('WSIbar ', max=len(wsi.get_tile_properties()))
                         for i in range(len(wsi.get_tile_properties())):
@@ -166,7 +179,12 @@ def construct_features(patients, setting, fold):
                                 patient_features = torch.zeros((0, feature_setting.get_feature_dimension()))
                                 # Pass batches
                                 i = 0
+                                #Encoder before training
+                                encoder_pre_train = copy.deepcopy(model.getEncoder()).state_dict()
                                 features_wsi = None
+                                #used to determine whether a gradient was computed for a marked output and None for an unmarked
+                                marked_output = None
+                                unmarked_outputs = None
                                 bar_batches = IncrementalBar('batchBar', max = len(loader)) 
                                 for batch in tqdm(loader):
                                     if i<=2:
@@ -176,22 +194,28 @@ def construct_features(patients, setting, fold):
                                         #features.to(device)
                                     if i == 0:
                                         features_wsi = features
+                                        marked_output = features
+                                        #print(marked_output.grad)
+                                        marked_output.retain_grad()
+                                        print(marked_output.grad)
                                     else:
                                         with torch.no_grad():
                                             batch = batch.to(device, non_blocking=True)
                                             # Compute features
                                             features = model.getEncoder()(batch)
                                             #features = features.cpu()
+                                    if i == 4:
+                                        unmarked_outputs = features
                                     # Concatenate features
-                                    features_wsi = torch.cat((patient_features, features), 0)
+                                    features_wsi = torch.cat((features_wsi, features), 0)
                                     i += 1
                                     print('catted features')
 
                                 # Close WSI
                                 wsi.close_wsi()
-                                
+                                features_wsi.retain_grad()
                             
-
+                            """
                             # Create directory to save features and keys
                             feature_directory = {}
                             # Fill directory
@@ -199,24 +223,46 @@ def construct_features(patients, setting, fold):
                                 # Key Tile position, value feature of Tile
                                 feature_directory[tile.get_position()] = patient_features[j]
                             # Save features
-                            wsi.set_features(feature_directory, i)
+                            wsi.set_features(feature_directory, i)"""
                         #TODO integrate the Decoder Process depending on the architecture
                         n_classes = setting.get_class_setting().get_n_classes()
                         acc_logger = Accuracy_Logger(n_classes=n_classes)
+                        features_wsi.to(device)
                         logits, Y_prob, Y_hat, A = model.getDecoder()(features_wsi, label)
+                        logits.retain_grad()
+                        print(logits.grad)
+                        label = label.type(torch.LongTensor)
+                        label = label.to(device)
+                        logits = logits.to(device)
+                        #logits.retain_grad()
                         print('begun decoder run')
                         acc_logger.log(Y_hat, label),
                         loss = loss_fn(logits, label)
+                        print(marked_output.grad)
                         loss_value = loss.item()
                         print(loss_value)
                         error = calculate_error(Y_hat, label)
                         print(error)
 
                         total_loss= loss
-
+                        
                         total_loss.backward()
+                        print(logits.grad)
+                        print(marked_output.grad)
                         optimizer.step()
+                        print('-------------------------')
+                        print('marked gradient')
+                        print(marked_output.grad)
+                        print('-------------------------')
+                        print('unmarked gradient')
+                        print(unmarked_outputs.grad)
+                        
                         optimizer.zero_grad()
+                        #encoder post train
+                        encoder_post_train = model.getEncoder().state_dict()
+
+                        #compare models
+                        compare_models(encoder_pre_train, encoder_post_train)
                         sys.exit()
                         bar_wsi.next()
                 
