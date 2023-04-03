@@ -111,11 +111,12 @@ def collate_features(batch):
 def create_cleaned_dataset(dataset):
     
     clean_dict_dataset = []
+    j = 0
     #first loop sorts the marked datasets first
     for ele in tqdm(iter(dataset)):
         if ele['mark']:
             clean_dict_dataset = [{"img":ele['all_p'],"pos":ele['tile_pos']}] + clean_dict_dataset
-            
+            j += 1
         else:
             #print('no mark')
             clean_dict_dataset.append({"img":ele['all_p'],"pos":ele['tile_pos']})
@@ -128,7 +129,7 @@ def create_cleaned_dataset(dataset):
         pos_list.append(data['pos'])
 
     list_of_marked = []
-    for i in range(768):
+    for i in range(j):
         list_of_marked.append(clean_dataset[i])
 
     return clean_dataset, list_of_marked, pos_list
@@ -309,30 +310,15 @@ def validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping,
                             data, marked_tens, pos_list = create_cleaned_dataset(data)
                             data = CleanDataset(data)
                             loader = DataLoader(dataset= data, batch_size=feature_setting.get_batch_size(), collate_fn=collate_features, sampler=SequentialSampler(data))
-                            for batch in tqdm(loader):
                                 
-                                features = test_encoder(loader, model, device)
-                                error, Y_prop = test_decoder(model, features, label, p[0], False)
-                                data, label = data.to(device), label.to(device)
-                                # Forward pass
-                                logits, Y_prob, Y_hat, A = model(data, label=label)
-
-                                acc_logger.log(Y_hat, label)
-
-                                loss = loss_fn(logits, label)
-
-                                val_loss_tile += loss.item()
-
-                                error = calculate_error(Y_hat, label)
-
-                                val_error_tile += error
+                            features = test_encoder(loader, model, device)
+                            error = test_decoder(model, features, label, device, False)
+                            # Forward pass
+                            val_error_tile += error
                             wsi.close_wsi()
-                            #compute error of tileprop
-                            val_error_tile /= len(loader)
-                            val_loss_tile /= len(loader)
                             val_error_tile_prop += val_error_tile
                             val_loss_tile_prop += val_loss_tile
-                        tile_prop_counter = i
+                            tileprop_counter += 1
                     
                     #compute error per wsi
                     val_loss_wsi += val_loss_tile_prop / tileprop_counter
@@ -463,7 +449,7 @@ def test_encoder(dataloader, model, device):
     with torch.no_grad():
         for batch in tqdm(dataloader):
             batch = batch.to(device)
-            features = model.getEncoder(batch)
+            features = model.getEncoder()(batch)
             if i == 0:
                 features_wsi = features
             else:
@@ -471,18 +457,11 @@ def test_encoder(dataloader, model, device):
     
     return features_wsi
 
-def test_decoder(model, features, label, patient, draw_map=True):
-    
+def test_decoder(model, features, label, device, draw_map=True):
+    label = label.type(torch.LongTensor)
+    features, label = features.to(device), label.to(device)
     with torch.no_grad():
         logits, Y_prob, Y_hat, A = model.getDecoder()(features, label)
-
     error = calculate_error(Y_hat, label)
-    A = A[Y_hat]
-    A = A.view(-1, 1).cpu().numpy()
-    # Get tile keys in attention map
-    keys = keys.cpu().numpy()[0]
-    if draw_map:
-        # Save attention map
-        patient.set_map(A, keys)
 
-    return error, Y_prob
+    return error
