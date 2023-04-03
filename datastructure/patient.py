@@ -191,7 +191,7 @@ class Patient(object):
         """
         return self.wsis
 
-    def get_features(self):
+    def get_features(self, wsi):
         """ Getter encoded patient features, concatenates all feature vectors of all WholeSlideImage objects and the keys of the tiles contained in them
 
         Returns
@@ -201,20 +201,14 @@ class Patient(object):
         list
             A list of tuples one per tile in the WholeSlideImage objects in the same order as their feature vectors
         """
-        # Create patient feature vector
+        print('a')
+        print(self.wsis)
         patient_features = np.zeros((0,self.setting.get_network_setting().get_F()))
-        patient_keys = []
-        # Iterate image properties
-        for wp in self.wsis:
-            # Iterate WSIs
-            for wsi in wp:
-                # Get all features for this WSI
-                features, keys = wsi.get_all_features()
-                # Append features to patient feature vector
-                patient_features = np.concatenate((patient_features, features), axis=0)
-                patient_keys += keys
+        # Get all features for this WSI
+        features, keys = wsi.get_all_features()
+        features = np.concatenate((patient_features, features), axis = 0)        
 
-        return patient_features, patient_keys
+        return features, keys
 
     def save_predicted_scores(self, folder):
         """ Save predicted scores in diagnosis object of patient
@@ -226,7 +220,7 @@ class Patient(object):
         """
         self.diagnosis.save_predicted_scores(self.identifier, folder)
 
-    def set_map(self, A, keys):
+    def set_map(self, A, keys, wsi):
         """ Set attention map per WSI of patient
 
         Parameters
@@ -235,6 +229,8 @@ class Patient(object):
             Numpy array with one value per tile of all WSIs
         keys : list
             List of tuples with a key per tile in the same order as A
+        wsi : WSI Obj
+            contains the wsi object for which the map needs to be set MD
         """
         # Compute relative Attention map over all Attention maps of this patient
         A_relative = rankdata(A, "dense")
@@ -242,25 +238,21 @@ class Patient(object):
         A_relative = np.array(A_relative) / max_rank
 
         tile_counter = 0
-        # Iterate WSI properties
-        for wp in self.wsis:
-            # Iterate patient WSIs
-            for wsi in wp:
-                # Count number of tiles for this WSI object (multiple tile properties might be possible)
-                n_keys = sum([len(k) for k in wsi.get_tiles_list()])
+        # Count number of tiles for this WSI object (multiple tile properties might be possible)
+        n_keys = sum([len(k) for k in wsi.get_tiles_list()])
 
-                # Get keys for current WSI
-                wsi_keys = keys[tile_counter:tile_counter+n_keys]
-                # Get attention values for current WSI
-                wsi_A = A[tile_counter:tile_counter+n_keys]
-                # Get relative attention_values for current WSI
-                wsi_A_relative = A_relative[tile_counter:tile_counter+n_keys]
+        # Get keys for current WSI
+        wsi_keys = keys[tile_counter:tile_counter+n_keys]
+        # Get attention values for current WSI
+        wsi_A = A[tile_counter:tile_counter+n_keys]
+        # Get relative attention_values for current WSI
+        wsi_A_relative = A_relative[tile_counter:tile_counter+n_keys]
 
-                # Increment tile counter
-                tile_counter += n_keys
+        # Increment tile counter
+        tile_counter += n_keys
 
-                # Set map for WSI
-                wsi.set_map(wsi_A, wsi_keys, wsi_A_relative)
+        # Set map for WSI
+        wsi.set_map(wsi_A, wsi_keys, wsi_A_relative)
 
     def save_map(self):
         """ Save attention map statistics to folder as specified by data setting and according to its image property for each WSI

@@ -5,7 +5,7 @@ import arguments.setting as setting
 import datastructure.dataset as dataset
 import os
 
-from learning.partial_training import construct_features
+from learning.partial_training_main_funct import partial_training
 from progress.bar import IncrementalBar
 import learning.train
 import learning.test
@@ -34,13 +34,10 @@ def run(data, setting, train=False, features_only=False, runs_start=0, runs=10, 
     if runs_start >= runs:
         return 
     import numpy as np
-
+    print(setting.get_data_setting().label_map_folder)
     print(np.shape(data.train_set))
     print("_-----")
-    # Create features
-    construct_features(data.get_train_set(), setting)
-    #construct_features(data.get_validation_set(), setting)
-    #construct_features(data.get_test_set(), setting)
+
 
     if features_only:
         return
@@ -56,9 +53,9 @@ def run(data, setting, train=False, features_only=False, runs_start=0, runs=10, 
         data.set_fold(k)
         # Train model
         if train:
-            learning.train.train(data.get_train_set(), data.get_validation_set(), k, setting)
+            partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k)
         # Test model
-        balanced_accuracy, sensitivity, specificity = learning.test.test(data.get_test_set(), k, setting, draw_map=draw_map)
+        balanced_accuracy, sensitivity, specificity = learning.testing_partial.test_partial(data.get_test_set(), k, setting, draw_map=draw_map)
 
         balanced_accuracies.append(balanced_accuracy)
         sensitivities.append(sensitivity)

@@ -336,7 +336,6 @@ class WholeSlideImage(object):
                 '_' + str(tile_property.get_tile_overlap()[1]) + '.pkl'
             
             self.feature_file_names.append(feature_file_name)
-
         self.tiles_inside = []
         self.tiles_outside = []
 
@@ -638,6 +637,7 @@ class WholeSlideImage(object):
             Index of the TileProperty
         """
         # Open correct feature file
+        print(self.feature_file_names)
         with open(self.feature_file_names[tile_property_index], 'wb') as f:
             # Write features to it
             pickle.dump(features, f, pickle.HIGHEST_PROTOCOL)
@@ -713,19 +713,32 @@ class WholeSlideImage(object):
         A_relative : numpy array
             Numpy array with one value per tile of all WSIs, relative rank was computed over all WSIs of patient
         """
-        
+        print('file Name of wsi')
+        print(self.file_name)
+        print('file.dict length')
+        #print(len(self.get_features(0)))
+        #print(self.tile_properties)
         counter_tiles = 0
-
+        print('A')
+        print(len(A))
+        print('Arel')
+        print(len(A_relative))
         # Iterate tile properties
         for i, tile_property in enumerate(self.tile_properties):
+            print(i)
             # Get feature dictionary for this property
             feature_dict = self.get_features(i)
             # Get number of tiles for property
             n_tiles = len(list(feature_dict.values()))
+            print(n_tiles)
+            
+            
+            print(counter_tiles)
             # Get keys for tile property
             tiles_keys = keys[counter_tiles:counter_tiles+n_tiles]
             # Get Attention_map for tile property
             tiles_A = A[counter_tiles:counter_tiles+n_tiles]
+            print(len(tiles_A))
             # Get relative Attention map for tile property
             A_relative_patient = A_relative[counter_tiles:counter_tiles+n_tiles]
 
@@ -733,7 +746,9 @@ class WholeSlideImage(object):
             tiles_A_relative = rankdata(tiles_A, "dense")
             max_rank = np.max(np.array(tiles_A_relative))
             tiles_A_relative = np.array(tiles_A_relative)/ max_rank
-
+            print(len(A_relative_patient))
+            print(len(tiles_A_relative))
+            print(n_tiles)
             # Increment tile counter
             counter_tiles += n_tiles
 
@@ -895,10 +910,9 @@ class WholeSlideImage(object):
             
             step_size_x = (1+self.used_level)*(tile_property.get_tile_size()[0] - tile_property.get_tile_overlap()[0])
             step_size_y = (1+self.used_level)*(tile_property.get_tile_size()[1] - tile_property.get_tile_overlap()[1])
-
             positions = [(sx, sy) for sx in range(0, self.size[0], step_size_x)\
                 for sy in range(0, self.size[1], step_size_y)\
-                if filter.check_tissue(self.overview_threshold, (sx, sy), tile_property.get_tile_size(), self.downsampling_factor, self.setting.get_data_setting().get_min_tissue_percentage())]
+                if filter.check_tissue(self.overview_threshold, (sx, sy), tile_property.get_tile_size(), self.downsampling_factor, self.factor, self.setting.get_data_setting().get_min_tissue_percentage())]
 
             outside_list = []
             inside_list = []
@@ -912,9 +926,10 @@ class WholeSlideImage(object):
             outside_lists.append(outside_list)
             inside_lists.append(inside_list)
 
+       
         self.tiles_inside = inside_lists
         self.tiles_outside = outside_lists
 
 
 
-                
+                                           

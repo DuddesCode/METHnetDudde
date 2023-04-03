@@ -103,7 +103,7 @@ class Accuracy_Logger(object):
         return acc, correct, count
 
 class EarlyStopping:
-    """ Class to compute wheter Early Stopping should be applied => stops if not better eresult was achieved after the current epoch
+    """ Class to compute wheter Early Stopping should be applied => stops if not better result was achieved after the current epoch
 
     Attributes
     ----------
@@ -190,6 +190,6 @@ class EarlyStopping:
             Name of the file to save model parameters to            
         """
         if self.verbose:
-            print(f'Validation losss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}). Saving model...')
+            print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}). Saving model...')
         torch.save(model.state_dict(), ckpt_name)
         self.val_loss_min = val_loss

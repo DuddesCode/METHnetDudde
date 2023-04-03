@@ -338,10 +338,10 @@ class DataSetting(object):
         self.use_only_stamp = False
         
         # Set True if want to filter for marked area
-        self.filter_non_stamp = False
+        self.filter_non_stamp = True
         self.label_map_folder = ''
         if self.filter_non_stamp:
-            self.label_map_folder = working_directory+' label_maps/'
+            self.label_map_folder = working_directory+'/stamps/'
         
 
         # Choose which Tiles to generate - detailed explanation in class 
