@@ -11,7 +11,7 @@ import learning.train
 import learning.test
 import getopt, sys
 
-def run(data, setting, train=False, features_only=False, runs_start=0, runs=10, draw_map=False):
+def run(data, setting, selection_mode, train=False, features_only=False, runs_start=0, runs=10, draw_map=False):
     """ Run model training and testing
 
     Parameters
@@ -53,7 +53,7 @@ def run(data, setting, train=False, features_only=False, runs_start=0, runs=10, 
         data.set_fold(k)
         # Train model
         if train:
-            partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k)
+            partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode)
         # Test model
         balanced_accuracy, sensitivity, specificity = learning.testing_partial.test_partial(data.get_test_set(), k, setting, draw_map=draw_map)
 
@@ -71,22 +71,23 @@ def run(data, setting, train=False, features_only=False, runs_start=0, runs=10, 
             
 
 
-def run_train(data_directories, csv_file, working_directory):
+def run_train(data_directories, csv_file, working_directory, selection_mode):
     """ Set up setting and dataset and run training/testing
     """
     s = setting.Setting(data_directories, csv_file, working_directory)
 
     data = dataset.Dataset(s)
     
-    run(data, s, train=True, features_only=False, runs_start=0,runs=s.get_network_setting().get_runs(), draw_map=True)
+    run(data, s, selection_mode=selection_mode, train=True, features_only=False, runs_start=0,runs=s.get_network_setting().get_runs(), draw_map=True)
 
 
 
 def main(argv):
     try:
-        opts, args = getopt.getopt(argv, "hd:c:w:", ["data_directory=","csv_file=","working_directory="])
+        #MD
+        opts, args = getopt.getopt(argv, "hd:c:w:m:", ["data_directory=","csv_file=","working_directory=","selection_mode="])
     except getopt.GetoptError:
-        print('main.py -d <data_directory> -c <csv_file> -w <working_directory>')
+        print('main.py -d <data_directory> -c <csv_file> -w <working_directory> -m <selection_mode>')
         sys.exit(2)
     opts_vals = [o[0] for o in opts]
     if not('-d' in opts_vals or '--data_directory' in opts_vals):
@@ -97,6 +98,10 @@ def main(argv):
         sys.exit(2)
     if not('-w' in opts_vals or '--working_directory' in opts_vals):
         print('Specify -w or --working_directory')
+        sys.exit(2)
+        #MD
+    if not('-m' in opts_vals or '--selection_mode' in opts_vals):
+        print('Specify -m or wrong selection_mode:[random, hand_picked, solid, attention]')
         sys.exit(2)
     for opt, arg in opts:
         if opt == '-h':
@@ -115,8 +120,13 @@ def main(argv):
             else:
                 print("Wrong data type for -w or --working_directory should be string")
                 sys.exit(2)
-
-    run_train(data_directory, csv_file, working_directory)
+        elif opt in ('-m', '--selection_mode'):
+            if type(arg) == str:
+                selection_mode = arg
+                if selection_mode not in ['random', 'hand_picked','solid', 'attention']:
+                    print("Wrong data type for -m or wrong selection_mode:[random, hand_picked, solid, attention]")
+                    sys.exit(2)
+    run_train(data_directory, csv_file, working_directory, selection_mode)
 
 if __name__=="__main__":
     #run_train()
