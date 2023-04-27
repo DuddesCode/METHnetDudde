@@ -31,7 +31,7 @@ def test_partial(test_patients, fold, setting, draw_map = True):
 
     model.load_state_dict(torch.load(model_folder + model_file))
 
-    balanced_accuracy, sensitivity, specificity = test_partial_model(model, n_classes, patients_test, draw_map, feature_setting)
+    balanced_accuracy, sensitivity, specificity = test_partial_model(model, n_classes, patients_test, feature_setting, draw_map)
 
     return balanced_accuracy, sensitivity, specificity
 
