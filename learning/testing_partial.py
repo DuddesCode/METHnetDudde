@@ -50,9 +50,11 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
         # Iterate image properties
         label = p.get_diagnosis().get_label()
         if label == 0:
+            label_for_error_classs_wise = 0
             label = torch.zeros(1)
             label = label.to(device)
         else:
+            label_for_error_classs_wise = 1
             label = torch.ones(1)
             label = label.to(device)
         for wsi_prop in p.get_wsis():
@@ -67,10 +69,10 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
 
                         loader = DataLoader(dataset= data, batch_size=feature_setting.get_batch_size(), collate_fn=collate_features, sampler=SequentialSampler(data))
                         features = test_encoder(loader, model, device)
-                        error, Y_prop = test_decoder(model, features, label, p, draw_map)
-                        error_class_wise[label] += error
-                        counter_class_wise[label] += 1
-                        p.get_diagnosis().add_predicted_score(Y_prop.cpu()[0][label.cpu()].numpy()[0])
+                        error, Y_prop = test_decoder(model, features, label, device, draw_map)
+                        error_class_wise[label_for_error_classs_wise] += error
+                        counter_class_wise[label_for_error_classs_wise] += 1
+                        p.get_diagnosis().add_predicted_score(Y_prop.cpu().item())
 
     sensitivity = (counter_class_wise[0] - error_class_wise[0]) / counter_class_wise[0]
     specificity = (counter_class_wise[1] - error_class_wise[1]) / counter_class_wise[1]

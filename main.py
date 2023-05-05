@@ -6,12 +6,27 @@ import datastructure.dataset as dataset
 import os
 
 from learning.partial_training_main_funct import partial_training
+from learning.testing_partial import test_partial
 from progress.bar import IncrementalBar
 import learning.train
 import learning.test
 import getopt, sys
 
-def run(data, setting, selection_mode, train=False, features_only=False, runs_start=0, runs=10, draw_map=False):
+def convert_results_to_csv(results):
+    import csv
+
+    header = ['Mode', 'num_batches', 'sensitivity', 'accuracy', 'specificity', 'iteration']
+    with open('./results.csv', 'w') as f:
+        writer = csv.writer(f)
+        writer.writerow(header)
+    with open('./results.csv', 'a', newline='') as f:
+        
+        writer = csv.writer(f)
+        
+        writer.writerows(results)
+    
+
+def run(data, setting, selection_mode, train=False, features_only=False, runs_start=0, runs=10, draw_map=False, json_path=None):
     """ Run model training and testing
 
     Parameters
@@ -34,6 +49,8 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
     if runs_start >= runs:
         return 
     import numpy as np
+    patient_array = np.load('./data_testingResults/B13-20.npy')
+    print(patient_array)
     print(setting.get_data_setting().label_map_folder)
     print(np.shape(data.train_set))
     print("_-----")
@@ -53,32 +70,42 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
         data.set_fold(k)
         # Train model
         if train:
-            partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode)
+            marked_batches = partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode, json_path = json_path)
         # Test model
-        balanced_accuracy, sensitivity, specificity = learning.testing_partial.test_partial(data.get_test_set(), k, setting, draw_map=draw_map)
-
+        balanced_accuracy, sensitivity, specificity = test_partial(data.get_test_set(), k, setting, draw_map=draw_map)
+        print('SPECIFIC post test partial')
+        print(specificity)
         balanced_accuracies.append(balanced_accuracy)
         sensitivities.append(sensitivity)
         specificities.append(specificity)
+    
+    result_list = []
+    for idx, ele in enumerate(balanced_accuracies):
+        temp_list = [selection_mode, marked_batches, sensitivities[idx], ele, specificities[idx], idx]
+        result_list.append(temp_list)
+    
+    convert_results_to_csv(result_list)
 
     # Save results
     for patients in data.get_test_set():
         for p in patients:
             results_folder = setting.get_data_setting().get_results_folder()
-            p.save_predicted_scores(results_folder)
+            label = p.get_diagnosis().get_label()
+            p.save_predicted_scores(f"{results_folder}_{label}")
             if draw_map:
                 p.save_map()
             
 
 
-def run_train(data_directories, csv_file, working_directory, selection_mode):
+def run_train(data_directories, csv_file, working_directory, selection_mode, json_path=None):
     """ Set up setting and dataset and run training/testing
+    MD added the json_path parameter for settings
     """
-    s = setting.Setting(data_directories, csv_file, working_directory)
+    s = setting.Setting(data_directories, csv_file, working_directory, json_path)
 
     data = dataset.Dataset(s)
     
-    run(data, s, selection_mode=selection_mode, train=True, features_only=False, runs_start=0,runs=s.get_network_setting().get_runs(), draw_map=True)
+    run(data, s, selection_mode=selection_mode, train=True, features_only=False, runs_start=0,runs=s.get_network_setting().get_runs(), draw_map=True, json_path=json_path)
 
 
 
@@ -131,4 +158,3 @@ def main(argv):
 if __name__=="__main__":
     #run_train()
     main(sys.argv[1:])
-

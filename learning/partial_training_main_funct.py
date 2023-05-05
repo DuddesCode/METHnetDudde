@@ -212,7 +212,8 @@ def set_label(label, device):
         label = label.to(device)
 
     return label
-def select_selection_mode(selection_mode, feature_setting, wsi, epoch=None):
+
+def select_selection_mode(selection_mode, feature_setting, wsi, epoch=None, json_path=None):
     """returns the selection mode
 
     Parameters
@@ -226,13 +227,13 @@ def select_selection_mode(selection_mode, feature_setting, wsi, epoch=None):
         mode that selects the  tiles to be marked
     """    
     if selection_mode == "random":
-        return RandomSelection(setting=feature_setting, wsi=wsi)
+        return RandomSelection(setting=feature_setting, wsi=wsi, json_path=json_path)
     elif selection_mode == "solid":
-        return SolidSelection(setting=feature_setting, wsi=wsi)
-    elif selection_mode == "handpicked":
-        return HandPickedSelection(setting=feature_setting, wsi=wsi)
+        return SolidSelection(setting=feature_setting, wsi=wsi, json_path=json_path)
+    elif selection_mode == "hand_picked":
+        return HandPickedSelection(setting=feature_setting, wsi=wsi, json_path=json_path)
     elif selection_mode == "attention":
-        return AttentionSelection(setting=feature_setting, wsi=wsi, epoch=epoch)
+        return AttentionSelection(setting=feature_setting, wsi=wsi, epoch=epoch, json_path=json_path)
     else:
         return RandomSelection()
 
@@ -261,7 +262,7 @@ def create_dataset(wsi, i):
 
     return data, marked_tensors, pos_list
 
-def partial_training(patients, patients_val, setting, fold, selection_mode):
+def partial_training(patients, patients_val, setting, fold, selection_mode, json_path = None):
     """ Create features for patients and save them
     Parameters
     ----------
@@ -302,6 +303,8 @@ def partial_training(patients, patients_val, setting, fold, selection_mode):
     model_file = 's_{}_checkpoint.pt'.format(fold)
     # Number of patients to process
     n_patients = sum([len(p) for p in patients])
+    #array to store the losses for wll wsi. One iteration means one wsi
+    iteration_losses = []
     for epoch in range(setting.get_network_setting().get_epochs()):
         model.getEncoder().train()
         model.getDecoder().train()
@@ -322,16 +325,28 @@ def partial_training(patients, patients_val, setting, fold, selection_mode):
                             # If no tiles then nothing to be done
                             if len(wsi.get_tiles_list()) != 0:
                                 #trains the encoder for one wsi property
-                                features_wsi, encoder_pre_train, unmarked_outputs, marked_output = train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, model)
+                                features_wsi, encoder_pre_train, unmarked_outputs, marked_output, num_batches_marked = train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, model, json_path=json_path)
                                 features_wsi.retain_grad()
                                 #sets the features of a wsi property
                             set_features(features_wsi, wsi, i)
                         #train the decoder
-                        train_decoder(model, loss_fn, features_wsi,  optimizer, marked_output, unmarked_outputs, encoder_pre_train, setting, device, label, p, wsi)
+                        loss_wsi = train_decoder(model, loss_fn, features_wsi,  optimizer, marked_output, unmarked_outputs, encoder_pre_train, setting, device, label, p, wsi)
+                        iteration_losses.append(loss_wsi)
         #validate the model
         stop = validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping, patients_val, feature_setting, ckpt_name=model_folder + model_file)
         if stop and setting.get_network_setting().get_early_stopping():
             break
+    iteration_losses = np.array(iteration_losses, dtype=np.float32)
+    if json_path is not None:
+        save_it_losses(iteration_losses, json_path)
+    return num_batches_marked
+
+def save_it_losses(it_losses, json_path):
+    import json
+    with open(json_path+'setup.json', 'r') as outfile:
+        setup_file = json.load(outfile)
+    fn = setup_file['test_score_folder']+'losses'+'.npy'
+    np.save(fn, it_losses)
 
 def set_features(features_wsi, wsi, i):
     """sets the features of a patient for a wsi
@@ -356,7 +371,7 @@ def set_features(features_wsi, wsi, i):
     # Save features
     wsi.set_features(feature_directory, i)
 
-def train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, model):
+def train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, model, json_path=None):
     """runs the encoder and concatenates the computed features per tile
 
     Parameters
@@ -390,7 +405,7 @@ def train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, mode
     # Open WSI
     wsi.load_wsi()
     #select the selection mode according to the settings
-    selection = select_selection_mode(selection_mode, feature_setting, wsi, epoch)
+    selection = select_selection_mode(selection_mode, feature_setting, wsi, epoch, json_path=json_path)
     #mark tiles as defined by the selection mode
     selection.tile_marking()
     # Create Dataset
@@ -412,7 +427,7 @@ def train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, mode
     #close WSI
     wsi.close_wsi()
     #retain the gradients for proofs
-    return features_wsi, encoder_pre_train, unmarked_outputs, marked_output
+    return features_wsi, encoder_pre_train, unmarked_outputs, marked_output, selection.get_marked_batches()
 
 def set_error(loss_parent, error_parent, loss_child, error_child, counter, ret_counter=True):
     """set an error for the validation of an epoch
@@ -602,12 +617,12 @@ def train_encoder(dataloader, model, device, marked_tens, number_markings, rando
                 features = model.getEncoder()(batch)
                 if i == 2:
                     unmarked_output = features
-        if i == 4:
+        #if i == 4:
             #used to confirm that the first two batches are identical with the marked batches 
-            print(torch.equal(batchlist[0], marked_tens[0]))
-            print(not torch.equal(batchlist[0].to('cpu'),marked_tens[2].to('cpu')))
-            print(not torch.equal(batchlist[1].to('cpu'),marked_tens[2].to('cpu')))
-            print(torch.equal(batchlist[1], marked_tens[1]))
+            #print(torch.equal(batchlist[0], marked_tens[0]))
+            #print(not torch.equal(batchlist[0].to('cpu'),marked_tens[2].to('cpu')))
+            #print(not torch.equal(batchlist[1].to('cpu'),marked_tens[2].to('cpu')))
+            #print(torch.equal(batchlist[1], marked_tens[1]))
         # Concatenate features
         features_wsi = torch.cat((features_wsi, features), 0)
         i += 1
@@ -678,20 +693,20 @@ def train_decoder(model, loss_fn, features, optimizer, marked_output, unmarked_o
     #print the current loss
     print(loss_value)
     error = calculate_error(Y_hat, label)
-    print(error)
+    #print(error)
 
     total_loss= loss
     
     total_loss.backward()
-    print(logits.grad)
-    print(marked_output.grad)
+    #print(logits.grad)
+    #print(marked_output.grad)
     optimizer.step()
-    print('-------------------------')
-    print('marked gradient')
-    print(marked_output.grad)
-    print('-------------------------')
-    print('unmarked gradient')
-    print(unmarked_output.grad)
+    #print('-------------------------')
+    #print('marked gradient')
+    #print(marked_output.grad)
+    #print('-------------------------')
+    #print('unmarked gradient')
+    #print(unmarked_output.grad)
     
     optimizer.zero_grad()
     # Get attention map for predicted class
@@ -708,7 +723,8 @@ def train_decoder(model, loss_fn, features, optimizer, marked_output, unmarked_o
     encoder_post_train = model.getEncoder().state_dict()
 
     #compare models
-    compare_models(encoder_pre_train, encoder_post_train)
+    #compare_models(encoder_pre_train, encoder_post_train)
+    return loss_value
 
 def test_encoder(dataloader, model, device):
     """tests the encoder with the given dataloader

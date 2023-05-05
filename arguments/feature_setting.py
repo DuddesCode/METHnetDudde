@@ -23,9 +23,12 @@ class FeatureSetting(object):
     get_feature_dimension()
         Return feature_dimension
     """
-    def __init__(self):
+    def __init__(self, json_file=None):
         """
+        json_file: dict default None
+            contains setup data for evaluation purposes
         """
+        
         # Set True if want to skip already encoded features
         self.skip_existing = True
         # Set True if want to augment tiles according to augmentation sequence during training
@@ -34,6 +37,9 @@ class FeatureSetting(object):
         self.batch_size = 256
         # Feature Dimension to use
         self.feature_dimension = 1024
+        #sets the batch_size to the number given in setup
+        if json_file is not None:
+            self.batch_size = json_file['batch_size']
 
     def get_skip_existing(self):
         """ Return skip_existing

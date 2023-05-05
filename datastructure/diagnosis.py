@@ -258,5 +258,6 @@ class Diagnosis(object):
         folder : string
             The path where the scores should be saved to
         """
-        fn = folder + identifier + '.npy'
+        #Added folder layer MD
+        fn = folder +'/'+ identifier + '.npy'
         np.save(fn, np.array(self.predicted_scores))

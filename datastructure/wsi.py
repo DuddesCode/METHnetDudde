@@ -197,6 +197,10 @@ class WholeSlideImage(object):
         Get list relative (ranking over this property) attention values for tile_list 
     set_inside_outside()
         Compute which tiles are inside and outside of label map
+    get_inside()
+        returns a list of Tiles that are inside the marked area
+    get_outside()
+        returns a list of Tiles that are outside the marked area
     """
     def __init__(self, setting, identifier, image_property, data_folder):
         """
@@ -279,28 +283,24 @@ class WholeSlideImage(object):
 
         # Threshold overview image
         self.overview_threshold, self.otsu_value = filter.filter_overview_image(self.overview_image)
-        
-        # Check wheter tissue outside marked area should be filtered
-        if self.setting.get_data_setting().get_filter_non_stamp():
-            self.label_file_name = self.identifier +\
+        self.label_file_name = self.identifier +\
             '_' + self.image_property.get_staining() +\
             '_' + self.image_property.get_scanner() +\
             '_' + str(self.image_property.get_magnification()) +\
             'x-labels.png'
-
-            if os.path.exists(self.setting.get_data_setting().get_label_map_folder()+self.label_file_name):
-                from PIL import Image
-
-                self.label_map = Image.open(self.setting.get_data_setting().get_label_map_folder()+self.label_file_name)
-            else:
-                # Default map is complete WSI
-                self.label_map = np.ones(np.shape(self.overview_threshold))
+        if os.path.exists(self.setting.get_data_setting().get_label_map_folder()+self.label_file_name):
+            from PIL import Image
+            self.label_map = Image.open(self.setting.get_data_setting().get_label_map_folder()+self.label_file_name)
+        else:
+            # Default map is complete WSI
+            self.label_map = np.ones(np.shape(self.overview_threshold))
+        # Check wheter tissue outside marked area should be filtered
+        if self.setting.get_data_setting().get_filter_non_stamp():
             
             # Filter tissue according to label map
             self.overview_threshold = self.overview_threshold * self.label_map
-        else:
-            self.label_file_name = ""
-            self.label_map = None
+
+
 
 
         # Size of WSI at used level
@@ -713,32 +713,18 @@ class WholeSlideImage(object):
         A_relative : numpy array
             Numpy array with one value per tile of all WSIs, relative rank was computed over all WSIs of patient
         """
-        print('file Name of wsi')
-        print(self.file_name)
-        print('file.dict length')
-        #print(len(self.get_features(0)))
-        #print(self.tile_properties)
         counter_tiles = 0
-        print('A')
-        print(len(A))
-        print('Arel')
-        print(len(A_relative))
         # Iterate tile properties
         for i, tile_property in enumerate(self.tile_properties):
-            print(i)
             # Get feature dictionary for this property
             feature_dict = self.get_features(i)
             # Get number of tiles for property
             n_tiles = len(list(feature_dict.values()))
-            print(n_tiles)
             
-            
-            print(counter_tiles)
             # Get keys for tile property
             tiles_keys = keys[counter_tiles:counter_tiles+n_tiles]
             # Get Attention_map for tile property
             tiles_A = A[counter_tiles:counter_tiles+n_tiles]
-            print(len(tiles_A))
             # Get relative Attention map for tile property
             A_relative_patient = A_relative[counter_tiles:counter_tiles+n_tiles]
 
@@ -746,9 +732,6 @@ class WholeSlideImage(object):
             tiles_A_relative = rankdata(tiles_A, "dense")
             max_rank = np.max(np.array(tiles_A_relative))
             tiles_A_relative = np.array(tiles_A_relative)/ max_rank
-            print(len(A_relative_patient))
-            print(len(tiles_A_relative))
-            print(n_tiles)
             # Increment tile counter
             counter_tiles += n_tiles
 
@@ -912,15 +895,17 @@ class WholeSlideImage(object):
             step_size_y = (1+self.used_level)*(tile_property.get_tile_size()[1] - tile_property.get_tile_overlap()[1])
             positions = [(sx, sy) for sx in range(0, self.size[0], step_size_x)\
                 for sy in range(0, self.size[1], step_size_y)\
-                if filter.check_tissue(self.overview_threshold, (sx, sy), tile_property.get_tile_size(), self.downsampling_factor, self.factor, self.setting.get_data_setting().get_min_tissue_percentage())]
+                if filter.check_tissue(self.overview_threshold*self.label_map, (sx, sy), tile_property.get_tile_size(), self.downsampling_factor, self.factor, self.setting.get_data_setting().get_min_tissue_percentage())]
 
             outside_list = []
             inside_list = []
 
             for tile in self.tiles[i]:
                 if tile.get_position() in positions:
+                    
                     inside_list.append(tile)
                 else:
+
                     outside_list.append(tile)
 
             outside_lists.append(outside_list)
@@ -930,6 +915,30 @@ class WholeSlideImage(object):
         self.tiles_inside = inside_lists
         self.tiles_outside = outside_lists
 
+    #MD?
+    def get_inside(self):
+
+        """returns all tiles inside the marked area
+
+        
+        Returns
+        -------
+        [Tile]
+        """
+        return self.tiles_inside
+    #MD?
+    def get_outside(self):
+        """returns all tiles outside the marked area
+
+        Returns
+        -------
+        [Tile]
+        """
+        return self.tiles_outside
+
+
+
+                                           
 
 
                                            

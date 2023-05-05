@@ -60,12 +60,14 @@ class NetworkSetting(object):
     get_runs()
         Return runs
     """
-    def __init__(self, working_directory):
+    def __init__(self, working_directory, json_file=None):
         """
         Parameters
         ----------
         working_directory : string
             Working directory for data
+        json_file : dict or None
+            contains a setup dict used for evaluation purposes
         """
         self.batch_size = 1
 
@@ -90,6 +92,10 @@ class NetworkSetting(object):
         self.epochs = 3
 
         self.runs = 1
+
+        if json_file is not None:
+            self.epochs = json_file['epochs']
+            self.runs = json_file['runs']
 
     def get_batch_size(self):
         """ Return batch_size attribute

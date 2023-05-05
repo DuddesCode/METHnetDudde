@@ -301,7 +301,7 @@ class DataSetting(object):
     get_attention_statistics_folder()
         Return attention_statistics_folder
     """
-    def __init__(self, data_directories, csv_file, working_directory):
+    def __init__(self, data_directories, csv_file, working_directory, json_file=None):
         """ 
         Parameters
         ----------
@@ -311,6 +311,8 @@ class DataSetting(object):
             Csv storing patients and their attributes
         working_directory : string
             working directory for data
+        json_file: dict default None
+            used for evaluation settings
         """
         
         # Identifier of patients to manually exclude
@@ -330,7 +332,6 @@ class DataSetting(object):
 
         # Choose which WSIs to use - detailed explanation in class
         self.image_properties = [
-            ImageProperty('HE', 'Hamamatsu', 40, 'FFPE', 40),
             ImageProperty('HE', 'Hamamatsu', 40, 'FFPE', 20)
         ]
 
@@ -338,10 +339,8 @@ class DataSetting(object):
         self.use_only_stamp = False
         
         # Set True if want to filter for marked area
-        self.filter_non_stamp = True
-        self.label_map_folder = ''
-        if self.filter_non_stamp:
-            self.label_map_folder = working_directory+'/stamps/'
+        self.filter_non_stamp = False
+        self.label_map_folder = working_directory+'/stamps/'
         
 
         # Choose which Tiles to generate - detailed explanation in class 
@@ -378,11 +377,22 @@ class DataSetting(object):
         self.feature_folder = working_directory+'Features/'
         helper.create_folder(self.feature_folder)
 
+        if json_file is not None:  
+            folder_for_results = json_file['test_score_folder']
+        else: folder_for_results = working_directory
 
-        self.results_folder = working_directory+'Results/'
+        self.results_folder = folder_for_results+'Results/'
         helper.create_folder(self.results_folder)
 
-        self.attention_statistics_folder = working_directory+'Attention_Statistics/'
+        #added folder for positive test results
+        self.results_folder_positive = self.results_folder +'_1'
+        helper.create_folder(self.results_folder_positive)
+
+        #added folder for negative test results
+        self.results_folder_negative = self.results_folder + '_0'
+        helper.create_folder(self.results_folder_negative)
+
+        self.attention_statistics_folder = folder_for_results+'Attention_Statistics/'
         helper.create_folder(self.attention_statistics_folder)
 
     def get_excluded_patients(self):

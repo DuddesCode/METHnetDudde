@@ -28,7 +28,7 @@ class Setting(object):
     get_feature_setting()
         Return feature_setting
     """
-    def __init__(self, data_directories, csv_file, working_directory):
+    def __init__(self, data_directories, csv_file, working_directory, json_path=None):
         """
         Parameters
         ----------
@@ -38,11 +38,18 @@ class Setting(object):
             CSV file where patient information is stored
         working_directory : string
             Working folder where files should be stored
+        json_path : string
+            path were a possible json file is stored. used for evaluation purposes
         """
-        self.data_setting = DataSetting(data_directories, csv_file, working_directory)
+        if json_path is not None:
+            import json
+            with open(json_path+'setup.json', 'r') as j_file:
+                json_file = json.load(j_file)
+
+        self.data_setting = DataSetting(data_directories, csv_file, working_directory, json_file)
         self.class_setting = ClassSetting()
-        self.network_setting = NetworkSetting(working_directory)
-        self.feature_setting = FeatureSetting()
+        self.network_setting = NetworkSetting(working_directory, json_file)
+        self.feature_setting = FeatureSetting(json_file)
 
     def get_data_setting(self):
         """ Return data_setting

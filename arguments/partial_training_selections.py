@@ -4,7 +4,7 @@ import random
 from abc import ABC, abstractmethod
 
 class Selection(ABC):
-    """Basse class for selectiing tiles for end to end training
+    """Base class for selectiing tiles for end to end training
 
     Parameters
     ----------
@@ -43,12 +43,19 @@ class Selection(ABC):
     set_marked_batches(num_marked: int)
         sets the number of batches that have to be marked
     """    
-    def __init__(self, setting, wsi) -> None:
-        self.marked_batches = 3
-        self.initial_batches = self.marked_batches
+    def __init__(self, setting, wsi, json_path=None) -> None:
+        self.marked_batches = 3 
         self.batch_size = setting.get_batch_size()
         self.number_of_tiles = self.marked_batches * setting.get_batch_size()
         self.wsi = wsi
+        if json_path is not None:
+            import json
+            with open(json_path+'setup.json', 'r') as j_file:
+                setup_file = json.load(j_file)
+                self.marked_batches = setup_file['num_batches']
+                print(self.marked_batches)
+                print("askjdbviabfvbapufbgaoiubfujbzafjbvajkdfbvjz<abfjb")
+        self.initial_batches = self.marked_batches
 
     @abstractmethod
     def tile_marking(self):
@@ -150,8 +157,8 @@ class RandomSelection(Selection):
     tile_marking()
         overwrites the base class function tile_marking()
     """
-    def __init__(self, setting, wsi) -> None:
-        super().__init__(setting, wsi)
+    def __init__(self, setting, wsi, json_path=None) -> None:
+        super().__init__(setting, wsi, json_path=json_path)
 
     def tile_marking(self):
         """changes the marked attribute of wsi Tiles of the given wsi until the number of batches is satisfied"""
@@ -178,8 +185,8 @@ class SolidSelection(Selection):
     tile_marking()
         overwrites the base class function tile_marking()
     """    
-    def __init__(self, wsi, setting) -> None:
-        super().__init__(setting, wsi)
+    def __init__(self, wsi, setting, json_path=None) -> None:
+        super().__init__(setting, wsi, json_path=json_path)
 
     def tile_marking(self):
         """changes the first self.number_of_tiles of a wsi to marked"""
@@ -205,9 +212,11 @@ class HandPickedSelection(Selection):
     tile_marking()
         overwrites the base class function tile_marking()
     """
-    def __init__(self, wsi, setting) -> None:
-        super().__init__(setting, wsi)
+    def __init__(self, wsi, setting, json_path=None) -> None:
+        super().__init__(setting, wsi, json_path=json_path)
         self.wsi.set_inside_outside()
+        #print(self.wsi.tiles_inside)
+        #print(self.wsi.tiles_outside)
 
     def tile_marking(self):
         """overwrites the abstract method of the base class
@@ -218,12 +227,12 @@ class HandPickedSelection(Selection):
 
         """ 
         #check if enough tiles in the marked region to satisfy the requested batch size       
-        if 0 >= (self.number_of_tiles - len(self.wsi.get_inside())):
+        if 0 >= (self.number_of_tiles - len(self.wsi.get_inside()[0])):
             for i in range(self.marked_batches * self.batch_size):
                 self.wsi.tiles_inside[0][i].set_mark(True)
         else:
-            tile_list = self.wsi.get_inside()[0]
-            outside_list = self.wsi.get_outside()[0]
+            tile_list = self.wsi.tiles_inside[0]
+            outside_list = self.wsi.tiles_outside[0]
             i = 0
             #check if enough tiles overall to satisfy the requested batch size
             if len(self.wsi.get_tiles_list()) > self.number_of_tiles:
@@ -257,8 +266,8 @@ class AttentionSelection(Selection):
     get_epoch()
         return the current epoch
     """      
-    def __init__(self, wsi, setting, epoch) -> None:
-        super().__init__(setting, wsi)
+    def __init__(self, wsi, setting, epoch, json_path=None) -> None:
+        super().__init__(setting, wsi, json_path=json_path)
         self.epoch = epoch
     
     def get_epoch(self):
