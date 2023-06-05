@@ -32,12 +32,12 @@ def fill_json(batch_size, num_batches, top_level_folder, mode, monte_carlo_runs,
 def eval_loop():
 
     batch_size = 128
-    mode_list = ['solid', 'random', 'hand_picked', 'attention']
+    mode_list = [ 'hand_picked', 'solid', 'random', 'attention']
     num_batches = 1
     monte_carlo_runs = 1
     epochs = 10
     runs = 1
-    work_dir = os.path.join(os.getcwd(), 'data_testing')
+    work_dir = os.path.join(os.getcwd(), 'data')
     csv_file = work_dir + '/test_HP.csv'
     data_dir = work_dir + '/wsi_test'
 
@@ -50,9 +50,15 @@ def eval_loop():
         
         print(folder)
     
-    for mode in mode_list:
-        current_table = np.load(os.getcwd()+f'/tests/{mode}_128_1_1_3_1/losses.npy')
-        np_losses.append(current_table)
+
+    current_table = np.load(os.getcwd()+f'/tests/solid_128_1_1_10_1/losses.npy')
+    np_losses.append(current_table)
+    current_table = np.load(os.getcwd()+f'/tests/random_128_1_1_10_1/losses.npy')
+    np_losses.append(current_table)
+    current_table = np.load(os.getcwd()+f'/tests/hand_picked_128_1_1_10_1/train_losses.npy')
+    np_losses.append(current_table)
+    current_table = np.load(os.getcwd()+f'/tests/attention_128_1_1_10_1/train_losses.npy')
+    np_losses.append(current_table)
     for i, ele in enumerate(np_losses):
         print(ele)
         plt.plot(ele, label=mode_list[i])

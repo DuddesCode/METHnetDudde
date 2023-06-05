@@ -304,7 +304,8 @@ def partial_training(patients, patients_val, setting, fold, selection_mode, json
     # Number of patients to process
     n_patients = sum([len(p) for p in patients])
     #array to store the losses for wll wsi. One iteration means one wsi
-    iteration_losses = []
+    train_losses_pos = []
+    train_losses_neg = []
     for epoch in range(setting.get_network_setting().get_epochs()):
         model.getEncoder().train()
         model.getDecoder().train()
@@ -330,22 +331,27 @@ def partial_training(patients, patients_val, setting, fold, selection_mode, json
                                 #sets the features of a wsi property
                             set_features(features_wsi, wsi, i)
                         #train the decoder
-                        loss_wsi = train_decoder(model, loss_fn, features_wsi,  optimizer, marked_output, unmarked_outputs, encoder_pre_train, setting, device, label, p, wsi)
-                        iteration_losses.append(loss_wsi)
+                        loss_wsi, error = train_decoder(model, loss_fn, features_wsi,  optimizer, marked_output, unmarked_outputs, encoder_pre_train, setting, device, label, p, wsi)
+                        if error == 1.0:
+                            train_losses_pos.append(loss_wsi)
+                        else:
+                            train_losses_neg.append(loss_wsi)
         #validate the model
-        stop = validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping, patients_val, feature_setting, ckpt_name=model_folder + model_file)
+        stop = validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping, patients_val, feature_setting, ckpt_name=model_folder + model_file, json_path=json_path)
         if stop and setting.get_network_setting().get_early_stopping():
             break
-    iteration_losses = np.array(iteration_losses, dtype=np.float32)
+    train_losses_pos = np.array(train_losses_pos, dtype=np.float32)
+    train_losses_neg = np.array(train_losses_neg, dtype-np.float32)
     if json_path is not None:
-        save_it_losses(iteration_losses, json_path)
+        save_it_losses(train_losses_pos, json_path, 'train_losses_pos')
+        save_it_losses(train_losses_neg, json_path, 'train_losses_neg')
     return num_batches_marked
 
-def save_it_losses(it_losses, json_path):
+def save_it_losses(it_losses, json_path, file_name):
     import json
     with open(json_path+'setup.json', 'r') as outfile:
         setup_file = json.load(outfile)
-    fn = setup_file['test_score_folder']+'losses'+'.npy'
+    fn = setup_file['test_score_folder']+file_name+'.npy'
     np.save(fn, it_losses)
 
 def set_features(features_wsi, wsi, i):
@@ -467,7 +473,7 @@ def set_error(loss_parent, error_parent, loss_child, error_child, counter, ret_c
         return loss_parent, error_parent
     
 
-def validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping, patients_val, feature_setting, ckpt_name,):
+def validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping, patients_val, feature_setting, ckpt_name, json_path=None):
     """validates the model for one epoch
 
     Parameters
@@ -503,6 +509,8 @@ def validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping,
     #define the validation loss and error
     val_loss = 0.
     val_error = 0.
+    val_losses_pos = []
+    val_losses_neg = []
     # Just forward pass needed
     with torch.no_grad():
         val_error_pat = 0.
@@ -538,8 +546,16 @@ def validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping,
                             #compute features    
                             features = test_encoder(loader, model, device)
                             #compute error and loss of decoder
-                            error, loss = test_decoder(model, features, label, device, False)
+                            error, loss, Y_prob = test_decoder(model, features, label, device, False)
                             # pass error and loss to parent errors
+                            print('error')
+                            print(error)
+                            print('loss')
+                            print(loss)
+                            if error == 1.0:
+                                val_losses_pos.append(loss)
+                            else:
+                                val_losses_neg.append(loss)
                             val_error_tile += error
                             val_loss_tile += loss
                             wsi.close_wsi()
@@ -559,7 +575,11 @@ def validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping,
         val_loss, val_error = set_error(val_loss, val_error, val_loss_pat, val_error_pat, patient_counter, False)
     # Compute Early stopping
     early_stopping(epoch, val_loss, model, ckpt_name=ckpt_name)
-
+    val_losses_pos = np.array(val_losses_pos, dtype=np.float32)
+    val_losses_neg = np.array(val_losses_neg, dtype-np.float32)
+    if json_path is not None:
+        save_it_losses(val_losses_pos, json_path, f'val_losses_pos_{epoch}')
+        save_it_losses(val_losses_neg, json_path, f'val_losses_neg_{epoch}')
     if early_stopping.early_stop:
         return True
 
@@ -679,7 +699,6 @@ def train_decoder(model, loss_fn, features, optimizer, marked_output, unmarked_o
     features.to(device)
     print('begun decoder run')
     logits, Y_prob, Y_hat, A = model.getDecoder()(features, label)
-    
     logits.retain_grad()
     
     #conversions of Tensor types for loss calculation
@@ -712,7 +731,6 @@ def train_decoder(model, loss_fn, features, optimizer, marked_output, unmarked_o
     # Get attention map for predicted class
     if check_feat_dir_contains_files(wsi):
         features, keys = patient.get_features(wsi)
-        print('featget')
         A = A[Y_hat]
         A = A.view(-1, 1).cpu().detach().numpy()
         # Get tile keys in attention map
@@ -724,7 +742,7 @@ def train_decoder(model, loss_fn, features, optimizer, marked_output, unmarked_o
 
     #compare models
     #compare_models(encoder_pre_train, encoder_post_train)
-    return loss_value
+    return loss_value, error
 
 def test_encoder(dataloader, model, device):
     """tests the encoder with the given dataloader
@@ -785,4 +803,4 @@ def test_decoder(model, features, label, device, draw_map=True):
     label, logits = label.to(device), logits.to(device)
 
     loss = loss_fn(logits, label)
-    return error, loss
+    return error, loss, Y_prob

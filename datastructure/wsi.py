@@ -295,7 +295,7 @@ class WholeSlideImage(object):
             # Default map is complete WSI
             self.label_map = np.ones(np.shape(self.overview_threshold))
         # Check wheter tissue outside marked area should be filtered
-        if self.setting.get_data_setting().get_filter_non_stamp():
+        if self.setting.get_data_setting().get_use_only_stamp():
             
             # Filter tissue according to label map
             self.overview_threshold = self.overview_threshold * self.label_map
@@ -907,7 +907,10 @@ class WholeSlideImage(object):
                 else:
 
                     outside_list.append(tile)
-
+            print("dkfdksf")
+            print(len(self.tiles[i]))
+            print(len(inside_list))
+            print(len(outside_list))
             outside_lists.append(outside_list)
             inside_lists.append(inside_list)
 
@@ -935,10 +938,3 @@ class WholeSlideImage(object):
         [Tile]
         """
         return self.tiles_outside
-
-
-
-                                           
-
-
-                                           

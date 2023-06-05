@@ -3,12 +3,12 @@ import torch
 import numpy as np
 from tqdm import tqdm
 
-from learning.partial_training_main_funct import Patient_Dataset, DataLoader, create_cleaned_dataset, CleanDataset, collate_features, SequentialSampler, test_decoder, test_encoder
+from learning.partial_training_main_funct import save_it_losses, Patient_Dataset, DataLoader, create_cleaned_dataset, CleanDataset, collate_features, SequentialSampler, test_decoder, test_encoder
 from models.restnet_custom import resnet50_baseline
 from models.model_Full import Partial_Net
 from models.attention_model import Attention_MB
 
-def test_partial(test_patients, fold, setting, draw_map = True):
+def test_partial(test_patients, fold, setting, draw_map = True, json_path= None):
     """Runs model prediction for a partially trained model"""
 
     network_setting = setting.get_network_setting()
@@ -31,7 +31,7 @@ def test_partial(test_patients, fold, setting, draw_map = True):
 
     model.load_state_dict(torch.load(model_folder + model_file))
 
-    balanced_accuracy, sensitivity, specificity = test_partial_model(model, n_classes, patients_test, feature_setting, draw_map)
+    balanced_accuracy, sensitivity, specificity = test_partial_model(model, n_classes, patients_test, feature_setting, draw_map, json_path)
 
     return balanced_accuracy, sensitivity, specificity
 
@@ -45,7 +45,8 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
     # Values for sensitivity and specificity
     error_class_wise = np.zeros(n_classes)
     counter_class_wise = np.zeros(n_classes)
-
+    test_losses_pos = []
+    test_losses_neg = []
     for p in patients_test:
         # Iterate image properties
         label = p.get_diagnosis().get_label()
@@ -69,11 +70,19 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
 
                         loader = DataLoader(dataset= data, batch_size=feature_setting.get_batch_size(), collate_fn=collate_features, sampler=SequentialSampler(data))
                         features = test_encoder(loader, model, device)
-                        error, Y_prop = test_decoder(model, features, label, device, draw_map)
+                        error, loss, Y_prop = test_decoder(model, features, label, device, draw_map)
+                        if error == 1.0:
+                            test_losses_pos.append(loss)
+                        else:
+                            test_losses_neg.append(loss)
                         error_class_wise[label_for_error_classs_wise] += error
                         counter_class_wise[label_for_error_classs_wise] += 1
                         p.get_diagnosis().add_predicted_score(Y_prop.cpu().item())
-
+    test_losses_pos = np.array(test_losses_pos, dtype=np.float32)
+    test_losses_neg = np.array(test_losses_neg, dtype-np.float32)
+    if json_path is not None:
+        save_it_losses(test_losses_pos, json_path, 'test_losses_pos')
+        save_it_losses(test_losses_neg, json_path, 'test_losses_neg')
     sensitivity = (counter_class_wise[0] - error_class_wise[0]) / counter_class_wise[0]
     specificity = (counter_class_wise[1] - error_class_wise[1]) / counter_class_wise[1]
 

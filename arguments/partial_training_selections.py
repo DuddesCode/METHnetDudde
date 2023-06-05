@@ -53,8 +53,7 @@ class Selection(ABC):
             with open(json_path+'setup.json', 'r') as j_file:
                 setup_file = json.load(j_file)
                 self.marked_batches = setup_file['num_batches']
-                print(self.marked_batches)
-                print("askjdbviabfvbapufbgaoiubfujbzafjbvajkdfbvjz<abfjb")
+        self.number_of_tiles = self.marked_batches * setting.get_batch_size()
         self.initial_batches = self.marked_batches
 
     @abstractmethod
@@ -215,8 +214,7 @@ class HandPickedSelection(Selection):
     def __init__(self, wsi, setting, json_path=None) -> None:
         super().__init__(setting, wsi, json_path=json_path)
         self.wsi.set_inside_outside()
-        #print(self.wsi.tiles_inside)
-        #print(self.wsi.tiles_outside)
+
 
     def tile_marking(self):
         """overwrites the abstract method of the base class
@@ -226,8 +224,8 @@ class HandPickedSelection(Selection):
         then it is filled up by other tiles outside the marked region.
 
         """ 
-        #check if enough tiles in the marked region to satisfy the requested batch size       
-        if 0 >= (self.number_of_tiles - len(self.wsi.get_inside()[0])):
+        #check if enough tiles in the marked region to satisfy the requested batch size    
+        if 0 <= (len(self.wsi.get_inside()[0]) - self.number_of_tiles):
             for i in range(self.marked_batches * self.batch_size):
                 self.wsi.tiles_inside[0][i].set_mark(True)
         else:
@@ -238,8 +236,11 @@ class HandPickedSelection(Selection):
             if len(self.wsi.get_tiles_list()) > self.number_of_tiles:
                 self.tile_number_check(self.wsi.get_tiles_list())
             #add tiles outside the marked region to all inside tiles
-            while len(tile_list) is not self.number_of_tiles:
-                tile_list.append(outside_list[0][i])
+            print('jksdnfnsjlgvn')
+            print(len(tile_list))
+            print(self.number_of_tiles)
+            while len(tile_list) != self.number_of_tiles:
+                tile_list.append(outside_list[i])
                 i += 1
             #set tiles in list to marked
             for tile in tile_list:
