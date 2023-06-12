@@ -172,7 +172,7 @@ class RandomSelection(Selection):
         return randomised_tile_list  
 
 class SolidSelection(Selection):
-    """Selects the tiles based on the number of tiles to mark. Not Random.
+    """Selects the tiles based on the number of tiles to mark. Fixed Random.
 
     Parameters
     ----------
@@ -184,19 +184,24 @@ class SolidSelection(Selection):
     tile_marking()
         overwrites the base class function tile_marking()
     """    
-    def __init__(self, wsi, setting, json_path=None) -> None:
+    def __init__(self, wsi, setting, epoch, json_path=None) -> None:
         super().__init__(setting, wsi, json_path=json_path)
+        self.epoch = epoch
 
+    def get_epoch(self):
+        return self.epoch
+    
     def tile_marking(self):
         """changes the first self.number_of_tiles of a wsi to marked"""
         #iterate over tilelists
-        for tilelist in self.wsi.get_tiles_list():
-            #check if enough tiles overall to satisfy the requested batch size
-            self.tile_number_check(tilelist)
-            for i, tile in enumerate(tilelist):
-                if i is not self.number_of_tiles:
+        if self.get_epoch() is 0:
+            print('worked')
+            for tile_list in self.wsi.get_tiles_list():
+                self.tile_number_check(tile_list)
+                randomised_tile_list = random.sample(tile_list, self.number_of_tiles)
+                for tile in randomised_tile_list:
                     tile.set_mark(True)
-            self.reset_to_initial_batch_count()
+                self.reset_to_initial_batch_count()
 
 class HandPickedSelection(Selection):
     """Marks tiles that are within an area marked by a specialist

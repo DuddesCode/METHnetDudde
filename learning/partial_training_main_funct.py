@@ -229,7 +229,7 @@ def select_selection_mode(selection_mode, feature_setting, wsi, epoch=None, json
     if selection_mode == "random":
         return RandomSelection(setting=feature_setting, wsi=wsi, json_path=json_path)
     elif selection_mode == "solid":
-        return SolidSelection(setting=feature_setting, wsi=wsi, json_path=json_path)
+        return SolidSelection(setting=feature_setting, wsi=wsi, epoch=epoch, json_path=json_path)
     elif selection_mode == "hand_picked":
         return HandPickedSelection(setting=feature_setting, wsi=wsi, json_path=json_path)
     elif selection_mode == "attention":
@@ -261,6 +261,18 @@ def create_dataset(wsi, i):
     data = CleanDataset(data)
 
     return data, marked_tensors, pos_list
+
+def solid_tile_reset(wsi_list):
+    for wsi in wsi_list:
+        for tile_list in wsi.get_tiles_list():
+            for tile in tile_list:
+                tile.set_mark(False)
+    for wsi in wsi_list:
+        for tile_list in wsi.get_tiles_list():
+            for tile in tile_list:   
+                if tile.get_mark():
+                    sys.exit()     
+    
 
 def partial_training(patients, patients_val, setting, fold, selection_mode, json_path = None):
     """ Create features for patients and save them
@@ -306,6 +318,7 @@ def partial_training(patients, patients_val, setting, fold, selection_mode, json
     #array to store the losses for wll wsi. One iteration means one wsi
     train_losses_pos = []
     train_losses_neg = []
+    wsi_list = []
     for epoch in range(setting.get_network_setting().get_epochs()):
         model.getEncoder().train()
         model.getDecoder().train()
@@ -321,6 +334,7 @@ def partial_training(patients, patients_val, setting, fold, selection_mode, json
                 for wp in p.get_wsis():
                     # Iterate WSIs with image property
                     for wsi in wp:
+                        wsi_list.append(wsi)
                         # Iterate Tile properties
                         for i in range(len(wsi.get_tile_properties())):
                             # If no tiles then nothing to be done
@@ -341,10 +355,16 @@ def partial_training(patients, patients_val, setting, fold, selection_mode, json
         if stop and setting.get_network_setting().get_early_stopping():
             break
     train_losses_pos = np.array(train_losses_pos, dtype=np.float32)
-    train_losses_neg = np.array(train_losses_neg, dtype-np.float32)
+    train_losses_neg = np.array(train_losses_neg, dtype=np.float32)
     if json_path is not None:
         save_it_losses(train_losses_pos, json_path, 'train_losses_pos')
         save_it_losses(train_losses_neg, json_path, 'train_losses_neg')
+    
+    if selection_mode == 'solid':
+        print('doenerbanana')
+        wsi_list = list(set(wsi_list))
+        solid_tile_reset(wsi_list)
+
     return num_batches_marked
 
 def save_it_losses(it_losses, json_path, file_name):
@@ -429,7 +449,10 @@ def train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, mode
     #iterates per batch in the Dataloader
     unmarked_outputs, marked_output, features_wsi = train_encoder(loader, model, device, marked_tensors_list, selection.get_marked_batches())
     #reset tiles
-    selection.tile_resetting()
+    print('gamma')
+    if selection_mode is not 'solid':
+        print('delta')
+        selection.tile_resetting()
     #close WSI
     wsi.close_wsi()
     #retain the gradients for proofs
@@ -553,9 +576,9 @@ def validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping,
                             print('loss')
                             print(loss)
                             if error == 1.0:
-                                val_losses_pos.append(loss)
+                                val_losses_pos.append(loss.cpu())
                             else:
-                                val_losses_neg.append(loss)
+                                val_losses_neg.append(loss.cpu())
                             val_error_tile += error
                             val_loss_tile += loss
                             wsi.close_wsi()
@@ -576,7 +599,7 @@ def validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping,
     # Compute Early stopping
     early_stopping(epoch, val_loss, model, ckpt_name=ckpt_name)
     val_losses_pos = np.array(val_losses_pos, dtype=np.float32)
-    val_losses_neg = np.array(val_losses_neg, dtype-np.float32)
+    val_losses_neg = np.array(val_losses_neg, dtype=np.float32)
     if json_path is not None:
         save_it_losses(val_losses_pos, json_path, f'val_losses_pos_{epoch}')
         save_it_losses(val_losses_neg, json_path, f'val_losses_neg_{epoch}')

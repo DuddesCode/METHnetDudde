@@ -14,7 +14,7 @@ RUN pip install openslide-python
 RUN pip install opencv-python
 RUN pip install aicspylibczi
 RUN pip install albumentations
-RUN pip install sklearn
+RUN pip install scikit-learn
 RUN pip install notebook
 RUN pip install torchviz
 

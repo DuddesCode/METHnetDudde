@@ -49,11 +49,6 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
     if runs_start >= runs:
         return 
     import numpy as np
-    patient_array = np.load('./data_testingResults/B13-20.npy')
-    print(patient_array)
-    print(setting.get_data_setting().label_map_folder)
-    print(np.shape(data.train_set))
-    print("_-----")
 
 
     if features_only:
@@ -72,7 +67,7 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
         if train:
             marked_batches = partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode, json_path = json_path)
         # Test model
-        balanced_accuracy, sensitivity, specificity = test_partial(data.get_test_set(), k, setting, draw_map=draw_map)
+        balanced_accuracy, sensitivity, specificity = test_partial(data.get_test_set(), k, setting, draw_map=draw_map, json_path=json_path)
         print('SPECIFIC post test partial')
         print(specificity)
         balanced_accuracies.append(balanced_accuracy)

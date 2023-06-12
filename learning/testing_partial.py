@@ -36,7 +36,7 @@ def test_partial(test_patients, fold, setting, draw_map = True, json_path= None)
     return balanced_accuracy, sensitivity, specificity
 
 
-def test_partial_model(model, n_classes, patients_test, feature_setting, draw_map):
+def test_partial_model(model, n_classes, patients_test, feature_setting, draw_map, json_path):
     """tests the partial model"""
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     
@@ -70,16 +70,17 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
 
                         loader = DataLoader(dataset= data, batch_size=feature_setting.get_batch_size(), collate_fn=collate_features, sampler=SequentialSampler(data))
                         features = test_encoder(loader, model, device)
-                        error, loss, Y_prop = test_decoder(model, features, label, device, draw_map)
+                        error, loss, Y_prob = test_decoder(model, features, label, device, draw_map)
                         if error == 1.0:
-                            test_losses_pos.append(loss)
+                            test_losses_pos.append(loss.cpu())
                         else:
-                            test_losses_neg.append(loss)
+                            test_losses_neg.append(loss.cpu())
                         error_class_wise[label_for_error_classs_wise] += error
                         counter_class_wise[label_for_error_classs_wise] += 1
-                        p.get_diagnosis().add_predicted_score(Y_prop.cpu().item())
+                        print(Y_prob.cpu()[0][1].numpy())
+                        p.get_diagnosis().add_predicted_score(Y_prob.cpu()[0][label_for_error_classs_wise].numpy())
     test_losses_pos = np.array(test_losses_pos, dtype=np.float32)
-    test_losses_neg = np.array(test_losses_neg, dtype-np.float32)
+    test_losses_neg = np.array(test_losses_neg, dtype=np.float32)
     if json_path is not None:
         save_it_losses(test_losses_pos, json_path, 'test_losses_pos')
         save_it_losses(test_losses_neg, json_path, 'test_losses_neg')
