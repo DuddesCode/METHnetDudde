@@ -30,12 +30,12 @@ def fill_json(batch_size, num_batches, top_level_folder, mode, monte_carlo_runs,
     return top_level_folder+'/'+folder_path
 
 def eval_loop():
-    #'solid', 'random', 'attention'
+    #'hand_picked', 'random', 'attention'
     batch_size = 128
-    mode_list = ['solid', 'hand_picked', 'random', 'attention']
+    mode_list = ['solid']
     num_batches = 1
     monte_carlo_runs = 1
-    epochs = 10
+    epochs = 1
     runs = 1
     work_dir = os.path.join(os.getcwd(), 'data')
     csv_file = work_dir + '/test_HP.csv'
@@ -55,6 +55,8 @@ def eval_loop():
     train_losses_pos = []
     test_losses_neg = []
     test_losses_pos = []
+    epoch_times = []
+    runtimes= []
     for mode in mode_list:
 
         #test losses
@@ -76,6 +78,32 @@ def eval_loop():
             temp_neg = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/val_losses_neg_{ep}.npy')
             val_losses_pos.append(temp_pos)
             val_losses_neg.append(temp_neg)
+
+        #runtime
+        temp_runtime = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/runtime.npy')
+        runtimes.append(temp_runtime)
+
+        temp_epoch_time = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/epoch_time.npy')
+        epoch_times.append(temp_epoch_time)
+
+    for i, ele in enumerate(epoch_times):
+        plt.plot(ele, label=mode_list[i])
+    xend = len(epoch_times[0])
+    plt.axis([0,xend+1,0.0,1000.0])
+    plt.legend(loc='best')
+    plt.xlabel("epochs")
+    plt.ylabel("time")
+
+    plt.show()
+
+    for i, ele in enumerate(runtimes):
+        plt.scatter(ele, i, label=mode_list[i])
+    xend = len(runtimes[0])
+    plt.legend(loc='best')
+    plt.xlabel("runs")
+    plt.ylabel("time")    
+
+    plt.show()
 
 
     for i, ele in enumerate(train_losses_pos):

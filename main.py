@@ -5,12 +5,14 @@ import arguments.setting as setting
 import datastructure.dataset as dataset
 import os
 
-from learning.partial_training_main_funct import partial_training
+from learning.partial_training_main_funct import partial_training, save_it_losses
 from learning.testing_partial import test_partial
 from progress.bar import IncrementalBar
 import learning.train
 import learning.test
 import getopt, sys
+
+from timeit import default_timer as timer
 
 def convert_results_to_csv(results):
     import csv
@@ -59,8 +61,10 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
     balanced_accuracies = []
     sensitivities = []
     specificities = []
+    runtimes = []
     # Iterate Monte-carlo
     for k in range(runs_start, runs):
+        runtimer_start = timer()
         # Set split
         data.set_fold(k)
         # Train model
@@ -68,11 +72,15 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
             marked_batches = partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode, json_path = json_path)
         # Test model
         balanced_accuracy, sensitivity, specificity = test_partial(data.get_test_set(), k, setting, draw_map=draw_map, json_path=json_path)
+        runtimer_stop = timer()
+        runtimes.append(runtimer_stop-runtimer_start)
         print('SPECIFIC post test partial')
         print(specificity)
         balanced_accuracies.append(balanced_accuracy)
         sensitivities.append(sensitivity)
         specificities.append(specificity)
+    runtimes = np.array(runtimes, dtype=np.float32)
+    save_it_losses(runtimes, json_path, 'runtime')
     
     result_list = []
     for idx, ele in enumerate(balanced_accuracies):

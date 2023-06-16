@@ -15,6 +15,7 @@ from learning.logger import EarlyStopping, Accuracy_Logger
 from .train import calculate_error
 from arguments.partial_training_selections import RandomSelection, SolidSelection, HandPickedSelection, AttentionSelection
 
+from timeit import default_timer as timer
 from tqdm import tqdm
 import copy
 from utils.helper import compare_models
@@ -316,10 +317,14 @@ def partial_training(patients, patients_val, setting, fold, selection_mode, json
     # Number of patients to process
     n_patients = sum([len(p) for p in patients])
     #array to store the losses for wll wsi. One iteration means one wsi
-    train_losses_pos = []
-    train_losses_neg = []
+    train_losses = []
+    val_losses = []
     wsi_list = []
+    epoch_timelist = []
     for epoch in range(setting.get_network_setting().get_epochs()):
+        running_loss = 0.0
+        loss_count = 0
+        epoch_timer_start = timer()
         model.getEncoder().train()
         model.getDecoder().train()
         model.train()
@@ -346,20 +351,31 @@ def partial_training(patients, patients_val, setting, fold, selection_mode, json
                             set_features(features_wsi, wsi, i)
                         #train the decoder
                         loss_wsi, error = train_decoder(model, loss_fn, features_wsi,  optimizer, marked_output, unmarked_outputs, encoder_pre_train, setting, device, label, p, wsi)
-                        if error == 1.0:
-                            train_losses_pos.append(loss_wsi)
-                        else:
-                            train_losses_neg.append(loss_wsi)
+                        
+                        running_loss += loss_wsi
+                        loss_count += 1
+
+        running_loss = running_loss / loss_count
+        train_losses.append(running_loss)
         #validate the model
-        stop = validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping, patients_val, feature_setting, ckpt_name=model_folder + model_file, json_path=json_path)
+        stop, val_loss = validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping, patients_val, feature_setting, ckpt_name=model_folder + model_file, json_path=json_path)
+        val_losses.append(val_loss.cpu())
         if stop and setting.get_network_setting().get_early_stopping():
             break
-    train_losses_pos = np.array(train_losses_pos, dtype=np.float32)
-    train_losses_neg = np.array(train_losses_neg, dtype=np.float32)
+        epoch_timer_stop = timer()
+        epoch_timelist.append(epoch_timer_stop - epoch_timer_start)
+        print('epochtime')
+        print(epoch_timelist)
+
+    train_losses = np.array(train_losses, dtype=np.float32)
+    val_losses = np.array(val_losses, dtype=np.float32)
+    print(train_losses)
+    epoch_timelist = np.array(epoch_timelist, dtype=np.float32)
     if json_path is not None:
-        save_it_losses(train_losses_pos, json_path, 'train_losses_pos')
-        save_it_losses(train_losses_neg, json_path, 'train_losses_neg')
-    
+        save_it_losses(train_losses, json_path, 'train_losses')
+        save_it_losses(epoch_timelist, json_path, 'epoch_time')
+        save_it_losses(val_losses, json_path, 'val_losses')
+
     if selection_mode == 'solid':
         print('doenerbanana')
         wsi_list = list(set(wsi_list))
@@ -532,8 +548,8 @@ def validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping,
     #define the validation loss and error
     val_loss = 0.
     val_error = 0.
-    val_losses_pos = []
-    val_losses_neg = []
+    val_losses = 0
+    val_errors = 0
     # Just forward pass needed
     with torch.no_grad():
         val_error_pat = 0.
@@ -541,26 +557,15 @@ def validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping,
         patient_counter = len(patients_val)
         #iterate patients
         for p in patients_val:
-            wsi_prop_counter = len(p[0].get_wsis())
-            val_error_wsi_prop = 0.
-            val_loss_wsi_prop = 0.
             #get label
             label = p[0].get_diagnosis().get_label()
             label = set_label(label, device)
             # Iterate image properties
             for wsi_prop in p[0].get_wsis():
-                wsi_counter = len(wsi_prop)
-                val_error_wsi = 0.
-                val_loss_wsi = 0.
                 #iterate WSIs in image property
                 for wsi in wsi_prop:
-                    tileprop_counter = 0
-                    val_loss_tile_prop = 0.
-                    val_error_tile_prop = 0.
                     #iterate tileproperties in WSI
                     for i in range(len(wsi.get_tile_properties())):
-                        val_error_tile = 0. 
-                        val_loss_tile = 0.
                         if len(wsi.get_tiles_list()) != 0:
                             wsi.load_wsi()
                             #create data
@@ -575,38 +580,21 @@ def validate_partial_net_epoch(epoch, model, n_classes, loss_fn, early_stopping,
                             print(error)
                             print('loss')
                             print(loss)
-                            if error == 1.0:
-                                val_losses_pos.append(loss.cpu())
-                            else:
-                                val_losses_neg.append(loss.cpu())
-                            val_error_tile += error
-                            val_loss_tile += loss
+                            
+                            val_error += error
+                            val_errors += 1
+                            val_loss += loss
+                            val_losses += 1
                             wsi.close_wsi()
 
-                            val_loss_tile_prop, val_error_tile_prop = set_error(val_loss_tile_prop, val_error_tile_prop, val_loss_tile, val_error_tile, 1, False)
-                            tileprop_counter += 1
-                    
-                    #compute error per wsi
-                    val_loss_wsi, val_error_wsi = set_error(val_loss_wsi, val_error_wsi, val_loss_tile_prop, val_error_tile_prop, tileprop_counter, False)
-                    wsi_counter += 1
-                #compute error per wsi_prop
-                val_loss_wsi_prop, val_error_wsi_prop = set_error(val_loss_wsi_prop, val_error_wsi_prop, val_loss_wsi, val_error_wsi, wsi_counter, False)
-                wsi_prop_counter += 1
-            #compute error per patient
-            val_loss_pat, val_error_pat = set_error(val_loss_pat, val_error_pat, val_loss_wsi_prop, val_error_wsi_prop, wsi_prop_counter, False)
-        #compute error overall
-        val_loss, val_error = set_error(val_loss, val_error, val_loss_pat, val_error_pat, patient_counter, False)
+    val_loss = val_loss / val_losses
     # Compute Early stopping
     early_stopping(epoch, val_loss, model, ckpt_name=ckpt_name)
-    val_losses_pos = np.array(val_losses_pos, dtype=np.float32)
-    val_losses_neg = np.array(val_losses_neg, dtype=np.float32)
-    if json_path is not None:
-        save_it_losses(val_losses_pos, json_path, f'val_losses_pos_{epoch}')
-        save_it_losses(val_losses_neg, json_path, f'val_losses_neg_{epoch}')
-    if early_stopping.early_stop:
-        return True
 
-    return False
+    if early_stopping.early_stop:
+        return True, val_loss
+
+    return False, val_loss
 
 def train_encoder(dataloader, model, device, marked_tens, number_markings, randomList = None, selection = None):
     """trains the encoder for one epoch
@@ -637,7 +625,7 @@ def train_encoder(dataloader, model, device, marked_tens, number_markings, rando
     features_wsi : torch.Tensor
         contains the features of the WSIs
     """
-    i = 0
+    i = 1
     batchlist = []
     features_wsi = None
     for batch in tqdm(dataloader):
@@ -647,7 +635,7 @@ def train_encoder(dataloader, model, device, marked_tens, number_markings, rando
             # Compute features
             features = model.getEncoder()(batch)
             print('marked')
-        if i == 0:
+        if i == 1:
             features_wsi = features
             marked_output = features
             marked_output.retain_grad()
@@ -735,10 +723,10 @@ def train_decoder(model, loss_fn, features, optimizer, marked_output, unmarked_o
     #print the current loss
     print(loss_value)
     error = calculate_error(Y_hat, label)
-    #print(error)
+    print(error)
 
     total_loss= loss
-    
+    print(total_loss)
     total_loss.backward()
     #print(logits.grad)
     #print(marked_output.grad)
