@@ -12,6 +12,7 @@ import learning.train
 import learning.test
 import getopt, sys
 
+from matplotlib import pyplot as plt
 from timeit import default_timer as timer
 
 def convert_results_to_csv(results):
@@ -26,6 +27,24 @@ def convert_results_to_csv(results):
         writer = csv.writer(f)
         
         writer.writerows(results)
+
+def dataset_saver(patients_test, patients_val, patients_train):
+    complete_list = patients_test + patients_val + patients_train
+
+    wsi_tile_dict = {}
+
+    for patients in complete_list:
+        for p in patients:
+            for wp in p.get_wsis():
+                for wsi in wp:
+                    for tilelist in wsi.get_tiles_list():
+                        wsi_tile_dict[wsi.get_identifier()] = len(tilelist)
+    
+    wsi_tile_dict = dict(sorted(wsi_tile_dict.items(), key=lambda x: x[1]))
+    plt.bar(*zip(*wsi_tile_dict.items()))
+    plt.show()
+    print(wsi_tile_dict)
+    sys.exit()
     
 
 def run(data, setting, selection_mode, train=False, features_only=False, runs_start=0, runs=10, draw_map=False, json_path=None):
@@ -67,9 +86,11 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
         runtimer_start = timer()
         # Set split
         data.set_fold(k)
+
+        dataset_saver(data.get_test_set(), data.get_validation_set(), data.get_train_set())
         # Train model
-        if train:
-            marked_batches = partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode, json_path = json_path)
+        #if train:
+            #marked_batches = partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode, json_path = json_path)
         # Test model
         balanced_accuracy, sensitivity, specificity = test_partial(data.get_test_set(), k, setting, draw_map=draw_map, json_path=json_path)
         runtimer_stop = timer()
@@ -81,13 +102,6 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
         specificities.append(specificity)
     runtimes = np.array(runtimes, dtype=np.float32)
     save_it_losses(runtimes, json_path, 'runtime')
-    
-    result_list = []
-    for idx, ele in enumerate(balanced_accuracies):
-        temp_list = [selection_mode, marked_batches, sensitivities[idx], ele, specificities[idx], idx]
-        result_list.append(temp_list)
-    
-    convert_results_to_csv(result_list)
 
     # Save results
     for patients in data.get_test_set():

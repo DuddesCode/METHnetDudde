@@ -35,7 +35,7 @@ def eval_loop():
     mode_list = ['solid']
     num_batches = 1
     monte_carlo_runs = 1
-    epochs = 1
+    epochs = 2
     runs = 1
     work_dir = os.path.join(os.getcwd(), 'data')
     csv_file = work_dir + '/test_HP.csv'
@@ -47,37 +47,27 @@ def eval_loop():
         
         run_train([data_dir], csv_file, work_dir, ele, folder)
         
-        print(folder)
     
-    val_losses_pos = []
-    val_losses_neg = []
-    train_losses_neg = []
-    train_losses_pos = []
-    test_losses_neg = []
-    test_losses_pos = []
+    val_losses = []
+    train_losses = []
+    test_losses = []
     epoch_times = []
     runtimes= []
     for mode in mode_list:
 
         #test losses
-        temp_test_pos = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/test_losses_pos.npy')
-        temp_test_neg = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/test_losses_neg.npy')
-        test_losses_pos.append(temp_test_pos)
-        test_losses_neg.append(temp_test_neg)
+        temp_test = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/test_losses.npy')
+        test_losses.append(temp_test)
 
         #train losses
-        temp_train_neg = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/train_losses_neg.npy')
-        temp_train_pos = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/train_losses_pos.npy')
-        train_losses_neg.append(temp_train_neg)
-        train_losses_pos.append(temp_train_pos)
+        temp_train = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/train_losses.npy')
+        train_losses.append(temp_train)
 
         #val losses
         for ep in range(epochs):
             print(ep)
-            temp_pos = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/val_losses_pos_{ep}.npy')
-            temp_neg = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/val_losses_neg_{ep}.npy')
-            val_losses_pos.append(temp_pos)
-            val_losses_neg.append(temp_neg)
+            temp_val = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/val_losses.npy')
+            val_losses.append(temp_val)
 
         #runtime
         temp_runtime = np.load(os.getcwd()+f'/tests/{mode}_{batch_size}_{num_batches}_{monte_carlo_runs}_{epochs}_{runs}/runtime.npy')
@@ -106,72 +96,42 @@ def eval_loop():
     plt.show()
 
 
-    for i, ele in enumerate(train_losses_pos):
+    for i, ele in enumerate(train_losses):
         print(ele)
-        plt.subplot(6,1,1)
+        plt.subplot(2,1,1)
         plt.plot(ele, label=mode_list[i])
-    xend = len(train_losses_pos[0])
-    plt.axis([1,xend+1,0.0,1.0])
+    xend = len(train_losses[0])
+    plt.axis([0,xend+1,0.0,1.0])
     plt.legend(loc='best')
     plt.xlabel("iterations")
     plt.ylabel("loss")
     
-    for i, ele in enumerate(train_losses_neg):
+    for i, ele in enumerate(test_losses):
         print(ele)
-        plt.subplot(6,1,2)
-        plt.plot(ele, label=mode_list[i])
-    xend = len(train_losses_neg[0])
-    plt.axis([1,xend+1,0.0,1.0])
+        plt.subplot(2,1,2)
+        plt.plot(ele, label='test')
+    xend = len(test_losses[0])
+    plt.axis([0,xend+1,0.0,1.0])
     plt.legend(loc='best')
     plt.xlabel("iterations")
     plt.ylabel("loss")
 
-    for i, ele in enumerate(test_losses_pos):
-        print(ele)
-        plt.subplot(6,1,3)
-        plt.plot(ele, label=mode_list[i])
-    xend = len(test_losses_pos[0])
-    plt.axis([1,xend+1,0.0,1.0])
-    plt.legend(loc='best')
-    plt.xlabel("iterations")
-    plt.ylabel("loss")
 
-    for i, ele in enumerate(train_losses_neg):
-        print(ele)
-        plt.subplot(6,1,4)
-        plt.plot(ele, label=mode_list[i])
-    xend = len(test_losses_neg[0])
-    plt.axis([1,xend+1,0.0,1.0])
-    plt.legend(loc='best')
-    plt.xlabel("iterations")
-    plt.ylabel("loss")
+    plt.show()
     
-    for i, ele in enumerate(val_losses_pos):
+    for i, ele in enumerate(val_losses):
         print(ele)
-        plt.subplot(6,1,5)
+        plt.subplot(2,1,2)
         plt.plot(ele, label=f'ep{i}')
-    xend = len(val_losses_pos[0])
-    plt.axis([1,xend+1,0.0,1.0])
+    xend = len(val_losses[0])
+    plt.axis([0,xend+1,0.0,1.0])
     plt.legend(loc='best')
     plt.xlabel("iterations")
     plt.ylabel("loss")
 
-    for i, ele in enumerate(val_losses_neg):
-        print('es')
-        print(ele)
-        plt.subplot(6,1,6)
-        plt.plot(ele, label=f'ep{i}')
-    xend = len(val_losses_neg[0])
-    print(xend)
-    plt.axis([0,xend, 0.0, 1.0])
-    plt.legend(loc='best')
-    plt.xlabel("iterations")
-    plt.ylabel("loss")
 
     plt.show()
     sys.exit()    
-
-
 
 
 eval_loop()

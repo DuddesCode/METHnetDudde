@@ -45,8 +45,7 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
     # Values for sensitivity and specificity
     error_class_wise = np.zeros(n_classes)
     counter_class_wise = np.zeros(n_classes)
-    test_losses_pos = []
-    test_losses_neg = []
+    test_losses = []
     for p in patients_test:
         # Iterate image properties
         label = p.get_diagnosis().get_label()
@@ -71,19 +70,14 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
                         loader = DataLoader(dataset= data, batch_size=feature_setting.get_batch_size(), collate_fn=collate_features, sampler=SequentialSampler(data))
                         features = test_encoder(loader, model, device)
                         error, loss, Y_prob = test_decoder(model, features, label, device, draw_map)
-                        if error == 1.0:
-                            test_losses_pos.append(loss.cpu())
-                        else:
-                            test_losses_neg.append(loss.cpu())
+                        test_losses.append(loss.cpu())
                         error_class_wise[label_for_error_classs_wise] += error
                         counter_class_wise[label_for_error_classs_wise] += 1
                         print(Y_prob.cpu()[0][1].numpy())
                         p.get_diagnosis().add_predicted_score(Y_prob.cpu()[0][label_for_error_classs_wise].numpy())
-    test_losses_pos = np.array(test_losses_pos, dtype=np.float32)
-    test_losses_neg = np.array(test_losses_neg, dtype=np.float32)
+    test_losses = np.array(test_losses, dtype=np.float32)
     if json_path is not None:
-        save_it_losses(test_losses_pos, json_path, 'test_losses_pos')
-        save_it_losses(test_losses_neg, json_path, 'test_losses_neg')
+        save_it_losses(test_losses, json_path, 'test_losses')
     sensitivity = (counter_class_wise[0] - error_class_wise[0]) / counter_class_wise[0]
     specificity = (counter_class_wise[1] - error_class_wise[1]) / counter_class_wise[1]
 
