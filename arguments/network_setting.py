@@ -74,6 +74,10 @@ class NetworkSetting(object):
         self.train_model = True
 
         self.model_folder = working_directory+'Models/'
+
+        #MD
+        if json_file is not None:
+            self.model_folder = json_file["test_score_folder"]+'/Models/'
         helper.create_folder(self.model_folder)
 
         self.dropout = 0.25

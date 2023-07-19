@@ -4,7 +4,7 @@ from datastructure.wsi import WholeSlideImage as WholeSlideImage
 import numpy as np
 
 from scipy.stats import rankdata
-
+import sys
 class Patient(object):
     """
     A class to represent one patient with diagnosis and histological slides.
@@ -201,8 +201,6 @@ class Patient(object):
         list
             A list of tuples one per tile in the WholeSlideImage objects in the same order as their feature vectors
         """
-        print('a')
-        print(self.wsis)
         patient_features = np.zeros((0,self.setting.get_network_setting().get_F()))
         # Get all features for this WSI
         features, keys = wsi.get_all_features()
@@ -233,10 +231,9 @@ class Patient(object):
             contains the wsi object for which the map needs to be set MD
         """
         # Compute relative Attention map over all Attention maps of this patient
-        A_relative = rankdata(A, "dense")
+        A_relative = rankdata(A, "dense") 
         max_rank = np.max(np.array(A_relative))
         A_relative = np.array(A_relative) / max_rank
-
         tile_counter = 0
         # Count number of tiles for this WSI object (multiple tile properties might be possible)
         n_keys = sum([len(k) for k in wsi.get_tiles_list()])

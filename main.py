@@ -7,10 +7,13 @@ import os
 
 from learning.partial_training_main_funct import partial_training, save_it_losses
 from learning.testing_partial import test_partial
+from learning.testing_parallelism import partial_training_parallel
 from progress.bar import IncrementalBar
 import learning.train
 import learning.test
 import getopt, sys
+
+import numpy as np
 
 from matplotlib import pyplot as plt
 from timeit import default_timer as timer
@@ -32,19 +35,27 @@ def dataset_saver(patients_test, patients_val, patients_train):
     complete_list = patients_test + patients_val + patients_train
 
     wsi_tile_dict = {}
-
+    tile_count = 0
     for patients in complete_list:
         for p in patients:
             for wp in p.get_wsis():
                 for wsi in wp:
                     for tilelist in wsi.get_tiles_list():
+                        tile_count += len(tilelist)
                         wsi_tile_dict[wsi.get_identifier()] = len(tilelist)
     
+    print(tile_count)
     wsi_tile_dict = dict(sorted(wsi_tile_dict.items(), key=lambda x: x[1]))
+    last_element = list(wsi_tile_dict)[-1]
+    print(last_element)
+    last_value = wsi_tile_dict[last_element]
+    print(last_value)
+    print('max batches')
+    print(last_value/128)
+    logscale = np.logspace(2.0, 212.0, num=7, dtype=int)
+    print(logscale)
     plt.bar(*zip(*wsi_tile_dict.items()))
     plt.show()
-    print(wsi_tile_dict)
-    sys.exit()
     
 
 def run(data, setting, selection_mode, train=False, features_only=False, runs_start=0, runs=10, draw_map=False, json_path=None):
@@ -87,10 +98,10 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
         # Set split
         data.set_fold(k)
 
-        dataset_saver(data.get_test_set(), data.get_validation_set(), data.get_train_set())
+        #dataset_saver(data.get_test_set(), data.get_validation_set(), data.get_train_set())
         # Train model
         #if train:
-            #marked_batches = partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode, json_path = json_path)
+        marked_batches = partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode, draw_map=draw_map, json_path = json_path)
         # Test model
         balanced_accuracy, sensitivity, specificity = test_partial(data.get_test_set(), k, setting, draw_map=draw_map, json_path=json_path)
         runtimer_stop = timer()
@@ -114,17 +125,21 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
             
 
 
-def run_train(data_directories, csv_file, working_directory, selection_mode, json_path=None):
+def run_train(data_directories, csv_file, working_directory, selection_mode, draw_map, json_path=None):
     """ Set up setting and dataset and run training/testing
     MD added the json_path parameter for settings
+    MD added draw_map parameter
     """
     s = setting.Setting(data_directories, csv_file, working_directory, json_path)
 
     data = dataset.Dataset(s)
     
-    run(data, s, selection_mode=selection_mode, train=True, features_only=False, runs_start=0,runs=s.get_network_setting().get_runs(), draw_map=True, json_path=json_path)
+    run(data, s, selection_mode=selection_mode, train=True, features_only=False, runs_start=0,runs=s.get_network_setting().get_runs(), draw_map=draw_map, json_path=json_path)
 
+def run_train_eval_mode(selection_mode, draw_map,  setting, data, json_path=None):
+    """script to use for training and evaluation"""
 
+    run(data, setting, selection_mode=selection_mode, train=True, features_only=False, runs_start=0,runs=setting.get_network_setting().get_runs(), draw_map=draw_map, json_path=json_path)
 
 def main(argv):
     try:
@@ -170,7 +185,8 @@ def main(argv):
                 if selection_mode not in ['random', 'hand_picked','solid', 'attention']:
                     print("Wrong data type for -m or wrong selection_mode:[random, hand_picked, solid, attention]")
                     sys.exit(2)
-    run_train(data_directory, csv_file, working_directory, selection_mode)
+    draw_map = False
+    run_train(data_directory, csv_file, working_directory, draw_map, selection_mode)
 
 if __name__=="__main__":
     #run_train()

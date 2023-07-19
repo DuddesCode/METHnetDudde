@@ -2,6 +2,9 @@ from tkinter import Image
 import utils.helper as helper
 from albumentations import (RandomCrop, Normalize, Compose)
 
+#MD
+import json
+
 class ImageProperty(object):
     """ Class to store parameters of one WholeSlideImage type to use
 
@@ -324,10 +327,10 @@ class DataSetting(object):
         # Csv of patients with attributes
         self.csv_patients = csv_file
         # JSON Tiling folder
-        self.json_tiling_folder = working_directory+'Tiling'
+        self.json_tiling_folder = working_directory+'Tiling/'
         helper.create_folder(self.json_tiling_folder)
         # Attentio Map folder
-        self.attention_folder = working_directory+'Attention'
+        self.attention_folder = working_directory+'/Attention/'
         helper.create_folder(self.attention_folder)
 
         # Choose which WSIs to use - detailed explanation in class
@@ -368,7 +371,10 @@ class DataSetting(object):
         # Set True if want to run Monte Carlo Folds instead of k-Fold
         self.monte_carlo = True
         # Folder to memorize Monte Carlo splits
-        self.monte_carlo_folder = working_directory+'splits/'
+        self.monte_carlo_folder = working_directory+'/splits/'
+        #MD
+        if json_file is not None:
+            self.monte_carlo_folder = json_file["test_score_folder"]+'/splits/'
         if self.monte_carlo:
             helper.create_folder(self.monte_carlo_folder)
 

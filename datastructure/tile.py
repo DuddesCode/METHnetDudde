@@ -81,6 +81,8 @@ class Tile(object):
         #used for selection for partial training MD
         self.mark = False
 
+        self.image = None
+
     def get_image(self, wsi, augment=True):
         """ Return Tiles image content
         Parameters
@@ -108,7 +110,13 @@ class Tile(object):
         # If augmentation should be performed apply augmentation sequence
         if augment:
             img = self.augmentation(image=img)['image']
+
+        self.image = img # TODO 
+
         return img, self.mark
+    
+    def get_image_matrix(self):
+        return self.image
 
     def get_position(self):
         """ Getter position attribute

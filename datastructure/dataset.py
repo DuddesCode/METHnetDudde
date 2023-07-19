@@ -86,6 +86,8 @@ class Dataset(object):
         if self.setting.get_class_setting().get_filter_methylation_confidence():
             self.filter_methylation_confidence()
 
+        #self.preload_imagedata()
+
         # number of classes equals amount of groups of cancer subtypes
         self.n_classes = self.setting.get_class_setting().get_n_classes()
         # Set fold default to first
@@ -248,6 +250,24 @@ class Dataset(object):
         bar.finish()
         print("Resulting in {} patients".format(len(patients)))
         self.patients = patients
+
+    def preload_imagedata(self):
+
+        bar = IncrementalBar('Loading image data: ', max=len(self.patients))
+        for patient in self.patients:
+            wsis = patient.get_wsis()
+            for wp in wsis:
+                for wsi in wp:
+                    tps = wsi.get_tiles_list()
+                    wsi.load_wsi()
+                    for tp in tps:
+                        for tile in tp:
+                            tile.get_image(wsi.get_image())
+                    wsi.close_wsi()
+
+            bar.next()
+
+        bar.finish()
 
     def set_fold(self, k=0):
         """ Sets the current split for train/validation/test set. Splitting can be done different ways according to parameters in data setting.
@@ -476,3 +496,8 @@ class Dataset(object):
                 List containing a list per class containing Patient objects assigned to test set
         """
         return self.test_set
+    
+    def set_settings(self, settings):
+        """MD set settings to new settings due to image proload condition"""
+        self.setting = settings
+

@@ -238,6 +238,7 @@ class WholeSlideImage(object):
         self.image_property = image_property
         # Tile properties of Tiles to generate
         self.tile_properties = self.setting.get_data_setting().get_tile_properties()
+        print(self.tile_properties)
         # Data Folder
         self.data_folder = data_folder
 
@@ -338,6 +339,24 @@ class WholeSlideImage(object):
             self.feature_file_names.append(feature_file_name)
         self.tiles_inside = []
         self.tiles_outside = []
+
+        #MD
+        #list used for solid selection during training
+        self.solid_selection_list = []*len(self.tile_properties)
+        print(len(self.solid_selection_list))
+
+    #MD
+    def get_solid_selection_list(self, tile_property_index):
+        """Returns the list for solid selection"""
+        try:
+            return self.solid_selection_list[tile_property_index]
+        except IndexError:
+            return []
+
+    #MD
+    def set_solid_selection_list(self, solid_list, tile_property_index):
+        """set the solid list to the tile property"""
+        self.solid_selection_list.append(solid_list)
 
     def load_wsi(self):
         """ Opens OpenSlideObject

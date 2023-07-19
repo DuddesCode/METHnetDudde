@@ -4,3 +4,4 @@ dataFeatures
 dataModels
 dataTiling
 tests
+*.pyc

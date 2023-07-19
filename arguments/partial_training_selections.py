@@ -1,6 +1,7 @@
 """contains functions and a class that holds the selected settings for a train run"""
 
 import random
+import numpy as np
 from abc import ABC, abstractmethod
 
 class Selection(ABC):
@@ -57,7 +58,7 @@ class Selection(ABC):
         self.initial_batches = self.marked_batches
 
     @abstractmethod
-    def tile_marking(self):
+    def tile_marking(self, i):
         """abstract method to decide how the tiles have to be marked
         """
         pass
@@ -133,7 +134,11 @@ class Selection(ABC):
         :param tiles: contains how many tiles exist in a list 
         :type tiles: int
         """    
+        print('came to fit_to_tile_num')
+        print(tiles)
+        print(self.batch_size)
         possible_batches = tiles // self.batch_size
+        print(possible_batches)
         self.set_marked_batches(possible_batches)
         self.set_num_tiles(possible_batches * self.batch_size)
 
@@ -159,15 +164,19 @@ class RandomSelection(Selection):
     def __init__(self, setting, wsi, json_path=None) -> None:
         super().__init__(setting, wsi, json_path=json_path)
 
-    def tile_marking(self):
+    def tile_marking(self, i):
         """changes the marked attribute of wsi Tiles of the given wsi until the number of batches is satisfied"""
 
-        for tile_list in self.wsi.get_tiles_list():
-            self.tile_number_check(tile_list)
-            randomised_tile_list = random.sample(tile_list, self.number_of_tiles)
-            for tile in randomised_tile_list:
-                tile.set_mark(True)
-            self.reset_to_initial_batch_count()
+        print('worked')
+        tile_list = self.wsi.get_tiles_list()[i]
+        self.tile_number_check(tile_list)
+        indices_array = np.arange(0, len(tile_list)-1, 1, dtype=int)
+        print(indices_array)
+        rng = np.random.default_rng()
+        rng.shuffle(indices_array)
+        print(indices_array)
+        randomised_tile_list = indices_array[0:self.number_of_tiles-1:1]
+        self.reset_to_initial_batch_count()
 
         return randomised_tile_list  
 
@@ -191,18 +200,28 @@ class SolidSelection(Selection):
     def get_epoch(self):
         return self.epoch
     
-    def tile_marking(self):
+    def tile_marking(self, i):
         """changes the first self.number_of_tiles of a wsi to marked"""
         #iterate over tilelists
-        if self.get_epoch() is 0:
+        print(self.get_epoch())
+        if self.wsi.get_solid_selection_list(0) == []:
             print('worked')
-            for tile_list in self.wsi.get_tiles_list():
-                self.tile_number_check(tile_list)
-                randomised_tile_list = random.sample(tile_list, self.number_of_tiles)
-                for tile in randomised_tile_list:
-                    tile.set_mark(True)
-                self.reset_to_initial_batch_count()
+            tile_list = self.wsi.get_tiles_list()[i]
+            self.tile_number_check(tile_list)
+            indices_array = np.arange(0, len(tile_list)-1, 1, dtype=int)
+            print(indices_array)
+            rng = np.random.default_rng()
+            rng.shuffle(indices_array)
+            print(indices_array)
+            final_indices = indices_array[0:self.number_of_tiles-1:1]
+            self.wsi.set_solid_selection_list(final_indices, i)
+            self.reset_to_initial_batch_count()
+        
+        else:
+            final_indices = self.wsi.get_solid_selection_list(i)
 
+        return final_indices
+    
 class HandPickedSelection(Selection):
     """Marks tiles that are within an area marked by a specialist
 
@@ -221,7 +240,7 @@ class HandPickedSelection(Selection):
         self.wsi.set_inside_outside()
 
 
-    def tile_marking(self):
+    def tile_marking(self, idx):
         """overwrites the abstract method of the base class
 
         Only tiles are selected that are within an area marked by a specialist.
@@ -229,27 +248,37 @@ class HandPickedSelection(Selection):
         then it is filled up by other tiles outside the marked region.
 
         """ 
-        #check if enough tiles in the marked region to satisfy the requested batch size    
+        #check if enough tiles in the marked region to satisfy the requested batch size
+        tile_list_final = []
         if 0 <= (len(self.wsi.get_inside()[0]) - self.number_of_tiles):
             for i in range(self.marked_batches * self.batch_size):
-                self.wsi.tiles_inside[0][i].set_mark(True)
+                tile_list_final.append(self.wsi.tiles_inside[0][i])
         else:
             tile_list = self.wsi.tiles_inside[0]
             outside_list = self.wsi.tiles_outside[0]
             i = 0
             #check if enough tiles overall to satisfy the requested batch size
-            if len(self.wsi.get_tiles_list()) > self.number_of_tiles:
-                self.tile_number_check(self.wsi.get_tiles_list())
+            if len(self.wsi.get_tiles_list()[idx]) < self.number_of_tiles:
+                print('jbsjkablsknvkjafbvuwbrg')
+                print(self.number_of_tiles)
+                self.tile_number_check(self.wsi.get_tiles_list()[idx])
+                print(self.number_of_tiles)
             #add tiles outside the marked region to all inside tiles
-            print('jksdnfnsjlgvn')
-            print(len(tile_list))
-            print(self.number_of_tiles)
             while len(tile_list) != self.number_of_tiles:
                 tile_list.append(outside_list[i])
                 i += 1
-            #set tiles in list to marked
-            for tile in tile_list:
-                tile.set_mark(True)
+            tile_list_final = tile_list
+        #get numpy index list of overall tiles
+        wsi_tile_list = self.wsi.get_tiles_list()[idx]
+        wsi_tile_list = np.array(wsi_tile_list)
+        tile_list_final = np.array(tile_list_final)
+        index_list = []
+        for ele in tile_list_final:
+            index_list.append(np.where(wsi_tile_list == ele)[0][0])
+        #sort tile list to get indexes
+        index_list = np.array(index_list)
+        return index_list
+            
             
 
 class AttentionSelection(Selection):
@@ -279,32 +308,40 @@ class AttentionSelection(Selection):
     def get_epoch(self):
         return self.epoch
     
-    def tile_marking(self):
+    def tile_marking(self, i):
         """overwrites the abstract method of the base class
 
         In the first epoch the tiles are marked at random
         After the first epoch the tiles are marked according to the curretn attention map of the wsi
         """                
-        if self.get_epoch() is not 0:
+        if self.get_epoch() != 0:
             #iterate over tilelists
-            for tile_list in self.wsi.get_tiles_list():
-                temp_tile_list = sorted(tile_list, key= lambda tile: tile.get_attention_values()[self.epoch - 1])
-                #check if number of tiles are fitted to tile list
-                self.tile_number_check(temp_tile_list)
-                #mark the designated tiles
-                for i in range(self.marked_batches * self.batch_size):
-                    temp_tile_list[i].set_mark(True)
-                self.reset_to_initial_batch_count()
+            tile_list = self.wsi.get_tiles_list()[i]
+            temp_tile_list = sorted(tile_list, key= lambda tile: tile.get_attention_values()[self.epoch - 1])
+            #check if number of tiles are fitted to tile list
+            self.tile_number_check(temp_tile_list)
+            #get all tiles from the list
+            temp_tile_list = np.array(temp_tile_list)
+            tile_list = np.array(tile_list)
+            temp_tile_list = temp_tile_list[0:((self.marked_batches*self.number_of_tiles)-1)]
+            index_tile_list = []
+            for ele in temp_tile_list:
+                index_tile_list.append(np.where(tile_list == ele)[0][0])
+            index_tile_list = np.array(index_tile_list)
+            self.reset_to_initial_batch_count()
         else:
             #iterate tilelists of a wsi
-            for tile_list in self.wsi.get_tiles_list():
-                #check if number of tiles are fitted to tile list
-                self.tile_number_check(tile_list)
-                randomised_tile_list = random.sample(tile_list, self.number_of_tiles)
-                #set in the random list to marked
-                for tile in randomised_tile_list:
-                    tile.set_mark(True)
-                self.reset_to_initial_batch_count()
+            print('worked')
+            tile_list = self.wsi.get_tiles_list()[i]
+            self.tile_number_check(tile_list)
+            indices_array = np.arange(0, len(tile_list)-1, 1, dtype=int)
+            print(indices_array)
+            rng = np.random.default_rng()
+            rng.shuffle(indices_array)
+            print(indices_array)
+            index_tile_list = indices_array[0:self.number_of_tiles-1:1]
+            self.reset_to_initial_batch_count()
 
+        return index_tile_list
 
 

@@ -59,7 +59,7 @@ class ClassSetting(object):
         # Class labels according to class attribute - determines valid samples
         self.class_labels = {
             "Meningioma benign-1":0,
-            "Meningioma intermediate-A":1
+            "Meningioma benign-2":1
         }
         # Number of classes is highest label + 1
         self.n_classes = max(self.class_labels.values()) + 1

@@ -28,8 +28,14 @@ def test_partial(test_patients, fold, setting, draw_map = True, json_path= None)
 
     model_folder = network_setting.get_model_folder()
     model_file = 's_{}_checkpoint.pt'.format(fold)
+    state_dict_poll = torch.load(model_folder + model_file)
+    from collections import OrderedDict
+    state_dict_clean = OrderedDict()
+    for k, v in state_dict_poll.items():
+        name = k.replace('module.', '')
+        state_dict_clean[name] = v
 
-    model.load_state_dict(torch.load(model_folder + model_file))
+    model.load_state_dict(state_dict_clean)
 
     balanced_accuracy, sensitivity, specificity = test_partial_model(model, n_classes, patients_test, feature_setting, draw_map, json_path)
 
@@ -64,7 +70,7 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
                         wsi.load_wsi()
 
                         data = Patient_Dataset(wsi, i)
-                        data, marked_tens, pos_list = create_cleaned_dataset(data)
+                        data, times_placehold = create_cleaned_dataset(data, None)
                         data = CleanDataset(data)
 
                         loader = DataLoader(dataset= data, batch_size=feature_setting.get_batch_size(), collate_fn=collate_features, sampler=SequentialSampler(data))
@@ -76,8 +82,12 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
                         print(Y_prob.cpu()[0][1].numpy())
                         p.get_diagnosis().add_predicted_score(Y_prob.cpu()[0][label_for_error_classs_wise].numpy())
     test_losses = np.array(test_losses, dtype=np.float32)
+    test_error_class_wise = np.array(error_class_wise, dtype=np.float32)
+    test_counter_class_wise = np.array(counter_class_wise, dtype= np.float32)
     if json_path is not None:
         save_it_losses(test_losses, json_path, 'test_losses')
+        save_it_losses(test_error_class_wise, json_path, 'test_error_class_wise')
+        save_it_losses(test_counter_class_wise, json_path, 'test_counter_class_wise')
     sensitivity = (counter_class_wise[0] - error_class_wise[0]) / counter_class_wise[0]
     specificity = (counter_class_wise[1] - error_class_wise[1]) / counter_class_wise[1]
 
