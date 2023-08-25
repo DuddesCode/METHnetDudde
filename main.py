@@ -101,7 +101,7 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
         #dataset_saver(data.get_test_set(), data.get_validation_set(), data.get_train_set())
         # Train model
         #if train:
-        marked_batches = partial_training(patients = data.get_train_set(), patients_val=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode, draw_map=draw_map, json_path = json_path)
+        marked_batches = partial_training(train_patients = data.get_train_set(), validation_patients=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode, draw_map=draw_map, json_path = json_path)
         # Test model
         balanced_accuracy, sensitivity, specificity = test_partial(data.get_test_set(), k, setting, draw_map=draw_map, json_path=json_path)
         runtimer_stop = timer()

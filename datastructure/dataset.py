@@ -86,7 +86,7 @@ class Dataset(object):
         if self.setting.get_class_setting().get_filter_methylation_confidence():
             self.filter_methylation_confidence()
 
-        #self.preload_imagedata()
+        self.preload_imagedata()
 
         # number of classes equals amount of groups of cancer subtypes
         self.n_classes = self.setting.get_class_setting().get_n_classes()
@@ -262,7 +262,7 @@ class Dataset(object):
                     wsi.load_wsi()
                     for tp in tps:
                         for tile in tp:
-                            tile.get_image(wsi.get_image())
+                            tile.get_image(wsi.get_image(),True)
                     wsi.close_wsi()
 
             bar.next()
@@ -498,6 +498,6 @@ class Dataset(object):
         return self.test_set
     
     def set_settings(self, settings):
-        """MD set settings to new settings due to image proload condition"""
+        """MD set settings to new settings due to image preload condition"""
         self.setting = settings
 

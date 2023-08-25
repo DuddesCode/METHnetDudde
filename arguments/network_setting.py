@@ -101,6 +101,11 @@ class NetworkSetting(object):
             self.epochs = json_file['epochs']
             self.runs = json_file['runs']
 
+    #MD
+    def reset_folder_path(self, settings):
+        self.model_folder = settings.json_file["test_score_folder"]+'/Models/'
+        helper.create_folder(self.model_folder)
+
     def get_batch_size(self):
         """ Return batch_size attribute
         Returns

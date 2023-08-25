@@ -215,7 +215,7 @@ class SolidSelection(Selection):
             print(indices_array)
             final_indices = indices_array[0:self.number_of_tiles-1:1]
             self.wsi.set_solid_selection_list(final_indices, i)
-            self.reset_to_initial_batch_count()
+            #self.reset_to_initial_batch_count()
         
         else:
             final_indices = self.wsi.get_solid_selection_list(i)

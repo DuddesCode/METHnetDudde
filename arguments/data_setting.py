@@ -598,3 +598,20 @@ class DataSetting(object):
             attention_statistics_folder
         """
         return self.attention_statistics_folder
+
+    #MD
+    def reset_folder_paths(self, settings):
+        """used to test if folder paths can be reset"""
+          
+        folder_for_results = settings.json_file['test_score_folder']
+
+        self.results_folder = folder_for_results+'Results/'
+        helper.create_folder(self.results_folder)
+
+        #added folder for positive test results
+        self.results_folder_positive = self.results_folder +'_1'
+        helper.create_folder(self.results_folder_positive)
+
+        #added folder for negative test results
+        self.results_folder_negative = self.results_folder + '_0'
+        helper.create_folder(self.results_folder_negative)

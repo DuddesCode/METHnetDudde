@@ -81,8 +81,8 @@ class Patient_Dataset(Dataset):
         """
         # Get augmented image at index
         timer_start = timer()
-        a, mark = self.X.get_tiles_list()[self.i][idx].get_image(self.X.get_image(), True)
-        #a = self.X.get_tiles_list()[self.i][idx].get_image_matrix()
+        #a, mark = self.X.get_tiles_list()[self.i][idx].get_image(self.X.get_image(), True)
+        a = self.X.get_tiles_list()[self.i][idx].get_image_matrix()
         timer_stop = timer()
         time = timer_stop-timer_start                          
         # Transpose for channel first
@@ -284,7 +284,7 @@ def create_dataset(wsi, i, index=None):
     return data, time_loading_img
     
 
-def partial_training(patients, patients_val, setting, fold, selection_mode, draw_map=False, json_path = None):
+def partial_training(train_patients, validation_patients, setting, fold, selection_mode, draw_map=False, json_path = None):
     """ Create features for patients and save them
     Parameters
     ----------
@@ -306,6 +306,7 @@ def partial_training(patients, patients_val, setting, fold, selection_mode, draw
     param_Encoder = resnet50_baseline(pretrained=True)
     param_Encoder.train()
     param_Encoder = nn.DataParallel(param_Encoder, device_ids=[0,1,2,3])
+    #param_Encoder = nn.DataParallel(param_Encoder, device_ids=[0,1,2,3])
     # Get Decoder
     param_Decoder = Attention_MB(setting)
     param_Decoder.train()
@@ -332,6 +333,13 @@ def partial_training(patients, patients_val, setting, fold, selection_mode, draw
     epoch_timelist = []
     time_spent_imgs = []
     time_spent_dataset = []
+    acc_valid = []
+    sens_valid = []
+    spec_valid = []
+    logged_pos_val = []
+    logged_neg_val = []
+    logged_pos_train = []
+    logged_neg_train = []
 
     #enc_pre_train = copy.deepcopy(model.getEncoder()).state_dict()
     for epoch in range(setting.get_network_setting().get_epochs()):
@@ -341,53 +349,100 @@ def partial_training(patients, patients_val, setting, fold, selection_mode, draw
         model.getEncoder().train()
         model.getDecoder().train()
         model.train()
-        # Iterate patient classes
-        for patient in patients:
-            # Iterate patients in class
-            for p in patient:
-                # Iterate image properties
-                label = p.get_diagnosis().get_label()
-                label = set_label(label, device)
-                #print(p.get_wsis())
-                for wp in p.get_wsis():
-                    # Iterate WSIs with image property
-                    for wsi in wp:
-                        wsi_list.append(wsi)
-                        # Iterate Tile properties
-                        for i in range(len(wsi.get_tile_properties())):
-                            # If no tiles then nothing to be done
-                            if len(wsi.get_tiles_list()) != 0:
-                                #trains the encoder for one wsi property
-                                features_wsi, num_batches_marked, time_spent_img , time_spent_ds= train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, model, json_path=json_path)
-                                if num_batches_marked != 0:
-                                    features_wsi.retain_grad()
-                                time_spent_imgs.append(time_spent_img)
-                                time_spent_dataset.append(time_spent_ds)
-                                #sets the features of a wsi property
-                            set_features(features_wsi, wsi, i)
-                        #train the decoder
-                        loss_wsi, error = train_decoder(model, loss_fn, features_wsi,  optimizer, setting, device, label, p, wsi, draw_map=draw_map)
-                        #enc_post_train = model.getEncoder().to(device).state_dict()
 
-                        #compare_models(enc_pre_train, enc_post_train)
-                        running_loss += loss_wsi
-                        loss_count += 1
+        min_n = min([len(train_patients[i]) for i in range(len(train_patients))])
+
+        patients_train = []
+        # Iterate over classes
+        for patients in train_patients:
+            # Append minimum number of patients for this class to current epoch dataset
+            indices = np.arange(0, len(patients))
+            np.random.shuffle(indices)
+
+            for i in range(min_n):
+                patients_train.append(patients[indices[i]])
+
+        # Get minimum number of patients for one class in validation set
+        min_n = min([len(validation_patients[i]) for i in range(len(validation_patients))])
+
+        patients_validation = []
+        # Iterate over classes
+        for patients in validation_patients:
+            # Append minimum number of patients for this class to current epoch dataset
+            indices = np.arange(0, len(patients))
+            np.random.shuffle(indices)
+
+            for i in range(min_n):
+                patients_validation.append(patients[indices[i]])
+        
+        
+        pat_train_temp = []
+        patients_train_indices = np.arange(0, len(patients_train))
+        np.random.shuffle(patients_train_indices)
+        for ele in patients_train_indices:
+            pat_train_temp.append(patients_train[ele])
+        print(patients_train)
+        print(pat_train_temp)
+        # Iterate patient classes
+        for p in pat_train_temp:
+            # Iterate image properties
+            label = p.get_diagnosis().get_label()
+            label = set_label(label, device)
+            #print(p.get_wsis())
+            for wp in p.get_wsis():
+                # Iterate WSIs with image property
+                for wsi in wp:
+                    wsi_list.append(wsi)
+                    # Iterate Tile properties
+                    for i in range(len(wsi.get_tile_properties())):
+                        # If no tiles then nothing to be done
+                        if len(wsi.get_tiles_list()) != 0:
+                            #trains the encoder for one wsi property
+                            features_wsi, num_batches_marked, time_spent_img , time_spent_ds= train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, model, json_path=json_path)
+                            if num_batches_marked != 0:
+                                features_wsi.retain_grad()
+                            time_spent_imgs.append(time_spent_img)
+                            time_spent_dataset.append(time_spent_ds)
+                            #sets the features of a wsi property
+                        set_features(features_wsi, wsi, i)
+                    #train the decoder
+                    loss_wsi, error = train_decoder(model, loss_fn, features_wsi,  optimizer, setting, device, label, p, wsi, draw_map=draw_map)
+                    #enc_post_train = model.getEncoder().to(device).state_dict()
+
+                    #compare_models(enc_pre_train, enc_post_train)
+                    running_loss += loss_wsi
+                    loss_count += 1
 
         running_loss = running_loss / loss_count
         train_losses.append(running_loss)
         #validate the model
-        stop, val_loss = validate_partial_net_epoch(epoch, model, early_stopping, patients_val, feature_setting, ckpt_name=model_folder + model_file, json_path=json_path)
-        val_losses.append(val_loss.cpu())
+        stop, val_loss, acc_val, sens_val, spec_val, logger = validate_partial_net_epoch(epoch, model, early_stopping, patients_validation, feature_setting, n_classes, ckpt_name=model_folder + model_file, json_path=json_path)
+        val_losses.append(val_loss)
+        acc_valid.append(acc_val)
+        sens_valid.append(sens_val)
+        spec_valid.append(spec_val)
+        acc_pos, correct_pos, count_pos = logger.get_summary(1)
+        acc_neg, correct_neg, count_neg = logger.get_summary(0)
+        logdata_pos = [acc_pos, correct_pos, count_pos]
+        logdata_neg = [acc_neg, correct_neg, count_neg]
+        logged_pos_val.append(logdata_pos)
+        logged_neg_val.append(logdata_neg)
         if stop and setting.get_network_setting().get_early_stopping():
             break
         epoch_timer_stop = timer()
         epoch_timelist.append(epoch_timer_stop - epoch_timer_start)
         print('epochtime')
         print(epoch_timelist)
-
+    
+    
     train_losses = np.array(train_losses, dtype=np.float32)
     val_losses = np.array(val_losses, dtype=np.float32)
     print(train_losses)
+    acc_valid = np.array(acc_valid, dtype=np.float32)
+    sens_valid = np.array(sens_valid, dtype=np.float32)
+    spec_valid = np.array(spec_valid, dtype=np.float32)
+    logged_pos_val = np.array(logged_pos_val, dtype=np.float32)
+    logged_neg_val = np.array(logged_neg_val, dtype=np.float32)
     epoch_timelist = np.array(epoch_timelist, dtype=np.float32)
     time_spent_img = np.array(time_spent_imgs, dtype = np.float32)
     time_spent_dataset= np.array(time_spent_dataset, dtype = np.float32)
@@ -397,11 +452,12 @@ def partial_training(patients, patients_val, setting, fold, selection_mode, draw
         save_it_losses(val_losses, json_path, 'val_losses')
         save_it_losses(time_spent_imgs, json_path, 'time_spent_img')
         save_it_losses(time_spent_dataset, json_path, 'time_spent_dataset')
+        save_it_losses(acc_valid, json_path, 'acc_valid')
+        save_it_losses(sens_valid, json_path, 'sens_valid')
+        save_it_losses(spec_valid, json_path, 'spec_valid')
+        save_it_losses(logged_pos_val, json_path, 'logged_pos_val')
+        save_it_losses(logged_neg_val, json_path, 'logged_neg_val')
 
-    #if selection_mode == 'solid':
-        #print('doenerbanana')
-        #wsi_list = list(set(wsi_list))
-        #solid_tile_reset(wsi_list)
     return num_batches_marked
 
 def save_it_losses(it_losses, json_path, file_name):
@@ -488,7 +544,7 @@ def train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, mode
     return features_wsi, selection.get_marked_batches(), time_spent_img, time_spent_ds
 
 
-def validate_partial_net_epoch(epoch, model, early_stopping, patients_val, feature_setting, ckpt_name, json_path=None):
+def validate_partial_net_epoch(epoch, model, early_stopping, patients_val, feature_setting, n_classes, ckpt_name, json_path=None):
     """validates the model for one epoch
 
     Parameters
@@ -521,53 +577,72 @@ def validate_partial_net_epoch(epoch, model, early_stopping, patients_val, featu
     model.getDecoder().eval()
     model.getEncoder().eval()
     model.eval()
+    acc_logger = Accuracy_Logger(n_classes=n_classes)
     #define the validation loss and error
     val_loss = 0.
     val_error = 0.
     val_losses = 0
     val_errors = 0
+    error_class_wise = [0.0, 0.0]
+    counter_class_wise = [0.0, 0.0]
     # Just forward pass needed
     with torch.no_grad():
         #iterate patients
         for p in patients_val:
             #get label
-            label = p[0].get_diagnosis().get_label()
+            label = p.get_diagnosis().get_label()
             label = set_label(label, device)
             # Iterate image properties
-            for wsi_prop in p[0].get_wsis():
+            for wsi_prop in p.get_wsis():
                 #iterate WSIs in image property
                 for wsi in wsi_prop:
                     #iterate tileproperties in WSI
                     for i in range(len(wsi.get_tile_properties())):
                         if len(wsi.get_tiles_list()) != 0:
-                            wsi.load_wsi()
+                            #wsi.load_wsi()
                             #create data
                             data, time_placeholder = create_dataset(wsi, i)
                             loader = DataLoader(dataset= data, batch_size=feature_setting.get_batch_size(), collate_fn=collate_features, sampler=SequentialSampler(data))
                             #compute features    
                             features = test_encoder(loader, model, device)
                             #compute error and loss of decoder
-                            error, loss, Y_prob = test_decoder(model, features, label, device, False)
+                            error, loss, Y_prob, Y_hat = test_decoder(model, features, label, device, False)
                             # pass error and loss to parent errors
                             print('error')
                             print(error)
                             print('loss')
                             print(loss)
-                            
+
+                            acc_logger.log(Y_hat, label)
                             val_error += error
                             val_errors += 1
                             val_loss += loss
                             val_losses += 1
-                            wsi.close_wsi()
+                            #wsi.close_wsi()
+                            print(label)
+                            #reconfigure label
+                            if label[0] == 0.:
+                                label = 0
+                            else:
+                                label = 1
 
+                            error_class_wise[label] += error
+                            counter_class_wise[label] += 1
+                            
     val_loss = val_loss / val_losses
     # Compute Early stopping
     early_stopping(epoch, val_loss, model, ckpt_name=ckpt_name)
+    
+    # Compute sensitivity and specificity
+    sensitivity = (counter_class_wise[0] - error_class_wise[0]) / counter_class_wise[0]
+    specificity = (counter_class_wise[1] - error_class_wise[1]) / counter_class_wise[1]
+    # Compute balanced accuracy
+    balanced_accuracy = (sensitivity + specificity) / 2.
 
     if early_stopping.early_stop:
-        return True, val_loss
+        return True, val_loss, balanced_accuracy, sensitivity, specificity, acc_logger
 
-    return False, val_loss
+    return False, val_loss, balanced_accuracy, sensitivity, specificity, acc_logger
 
 def train_encoder(dataloader, model, device, number_markings):
     """trains the encoder for one epoch
@@ -609,7 +684,6 @@ def train_encoder(dataloader, model, device, number_markings):
             features = model.getEncoder()(batch)
 
             features = features.to('cuda:1', non_blocking=True)
-            print('marked')
         else:
             with torch.no_grad():
                 batchlist.append(batch)
@@ -618,19 +692,17 @@ def train_encoder(dataloader, model, device, number_markings):
                 # Compute features
                 features = model.getEncoder()(batch)
                 features = features.to('cuda:1', non_blocking=True)
+        
+        #control block to ckeck that no duplikates are created
         if i == 1:
             features_wsi = features
             features_wsi = features_wsi.to('cuda:1', non_blocking=True)
-
-        #if i == 4:
-            #used to confirm that the first two batches are identical with the marked batches 
-            #print(torch.equal(batchlist[0], marked_tens[0]))
-            #print(not torch.equal(batchlist[0].to('cpu'),marked_tens[2].to('cpu')))
-            #print(not torch.equal(batchlist[1].to('cpu'),marked_tens[2].to('cpu')))
-            #print(torch.equal(batchlist[1], marked_tens[1]))
-        # Concatenate features
-        features = features.to('cuda:1', non_blocking=True)
-        features_wsi = torch.cat((features_wsi, features), 0)
+        else:   
+            # Concatenate features
+            features = features.to('cuda:1', non_blocking=True)
+            features_wsi = torch.cat((features_wsi, features), 0)
+        
+        #increments i
         i += 1
 
     return features_wsi.to('cuda:0', non_blocking=True)
@@ -690,12 +762,6 @@ def train_encoder_parallel(dataloader, model, device, number_markings):
             features_wsi = features
             features_wsi = features_wsi.to('cuda:1', non_blocking=True)
 
-        #if i == 4:
-            #used to confirm that the first two batches are identical with the marked batches 
-            #print(torch.equal(batchlist[0], marked_tens[0]))
-            #print(not torch.equal(batchlist[0].to('cpu'),marked_tens[2].to('cpu')))
-            #print(not torch.equal(batchlist[1].to('cpu'),marked_tens[2].to('cpu')))
-            #print(torch.equal(batchlist[1], marked_tens[1]))
         # Concatenate features
         features = features.to('cuda:1', non_blocking=True)
         features_wsi = torch.cat((features_wsi, features), 0)
@@ -771,16 +837,8 @@ def train_decoder(model, loss_fn, features, optimizer, setting, device, label, p
     total_loss= loss
     print(total_loss)
     total_loss.backward()
-    #print(logits.grad)
-    #print(marked_output.grad)
     optimizer.step()
-    #print('-------------------------')
-    #print('marked gradient')
-    #print(marked_output.grad)
-    #print('-------------------------')
-    #print('unmarked gradient')
-    #print(unmarked_output.grad)
-    
+
     optimizer.zero_grad()
     # Get attention map for predicted class
     if check_feat_dir_contains_files(wsi):
@@ -791,11 +849,7 @@ def train_decoder(model, loss_fn, features, optimizer, setting, device, label, p
         if draw_map:
             # Save attention map
             patient.set_map(A, keys, wsi)
-    #encoder post train
-    encoder_post_train = model.getEncoder().state_dict()
-
-    #compare models
-    #compare_models(encoder_pre_train, encoder_post_train)
+    
     return loss_value, error
 
 def test_encoder(dataloader, model, device):
@@ -813,16 +867,28 @@ def test_encoder(dataloader, model, device):
     features_wsi : 
         _description_
     """
-    i = 0
+    #used to set the first iteration to features_wsi
+    first_it_control = True
 
     features_wsi = None
+
     with torch.no_grad():
         for batch in tqdm(dataloader):
+
+            #gains features from teh encoder
             batch = batch.to(device)
             features = model.getEncoder()(batch)
-            if i == 0:
+            
+            #control structure for features_wsi
+            if first_it_control:
+
                 features_wsi = features
+
+                #set to false to avoid duplikate values 
+                first_it_control = False
+            
             else:
+                #concatenates batches
                 features_wsi = torch.cat((features_wsi, features), 0)
     
     return features_wsi
@@ -848,13 +914,29 @@ def test_decoder(model, features, label, device, draw_map=True):
     _type_
         _description_
     """    
+    
+    #set loss funct
     loss_fn = torch.nn.CrossEntropyLoss()
-    label = label.type(torch.LongTensor)
-    features, label = features.to(device), label.to(device)
-    with torch.no_grad():
-        logits, Y_prob, Y_hat, A = model.getDecoder()(features, label)
-    error = calculate_error(Y_hat, label)
-    label, logits = label.to(device), logits.to(device)
 
-    loss = loss_fn(logits, label)
-    return error, loss, Y_prob
+    #convert label to LongTensor as specified by Decoder Modell
+    label = label.type(torch.LongTensor)
+    
+    #shift features and label to specified device
+    features, label = features.to(device), label.to(device)
+    
+    #avoid gradient computation
+    with torch.no_grad():
+        #gain predicted values
+        logits, Y_prob, Y_hat, A = model.getDecoder()(features, label)
+        
+        #calculate the error value
+        error = calculate_error(Y_hat, label)
+        
+        #shift label and output of decoder to specified device
+        label, logits = label.to(device), logits.to(device)
+        
+        #compute loss
+        loss = loss_fn(logits, label)
+        loss = loss.item()
+
+    return error, loss, Y_prob, Y_hat

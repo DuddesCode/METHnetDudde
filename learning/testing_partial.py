@@ -75,8 +75,8 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
 
                         loader = DataLoader(dataset= data, batch_size=feature_setting.get_batch_size(), collate_fn=collate_features, sampler=SequentialSampler(data))
                         features = test_encoder(loader, model, device)
-                        error, loss, Y_prob = test_decoder(model, features, label, device, draw_map)
-                        test_losses.append(loss.cpu())
+                        error, loss, Y_prob, Y_hat= test_decoder(model, features, label, device, draw_map)
+                        test_losses.append(loss)
                         error_class_wise[label_for_error_classs_wise] += error
                         counter_class_wise[label_for_error_classs_wise] += 1
                         print(Y_prob.cpu()[0][1].numpy())

@@ -44,12 +44,12 @@ class Setting(object):
         if json_path is not None:
             import json
             with open(json_path+'setup.json', 'r') as j_file:
-                json_file = json.load(j_file)
+                self.json_file = json.load(j_file)
 
-        self.data_setting = DataSetting(data_directories, csv_file, working_directory, json_file)
+        self.data_setting = DataSetting(data_directories, csv_file, working_directory, self.json_file)
         self.class_setting = ClassSetting()
-        self.network_setting = NetworkSetting(working_directory, json_file)
-        self.feature_setting = FeatureSetting(json_file)
+        self.network_setting = NetworkSetting(working_directory, self.json_file)
+        self.feature_setting = FeatureSetting(self.json_file)
 
     def get_data_setting(self):
         """ Return data_setting
@@ -86,3 +86,11 @@ class Setting(object):
             The FeatureSetting
         """
         return self.feature_setting
+    
+    #MD
+    def reset_folder_path(self, folder_path):
+        """trial if only the folder can be replaced on the fly"""
+        import json
+        with open(folder_path+'setup.json', 'r') as j_file:
+            json_file = json.load(j_file)
+        self.json_file = json_file
