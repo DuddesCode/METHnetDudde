@@ -37,12 +37,12 @@ def test_partial(test_patients, fold, setting, draw_map = True, json_path= None)
 
     model.load_state_dict(state_dict_clean)
 
-    balanced_accuracy, sensitivity, specificity = test_partial_model(model, n_classes, patients_test, feature_setting, draw_map, json_path)
+    balanced_accuracy, sensitivity, specificity = test_partial_model(model, n_classes, patients_test, feature_setting, draw_map, json_path, fold)
 
     return balanced_accuracy, sensitivity, specificity
 
 
-def test_partial_model(model, n_classes, patients_test, feature_setting, draw_map, json_path):
+def test_partial_model(model, n_classes, patients_test, feature_setting, draw_map, json_path, mk_run):
     """tests the partial model"""
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
     
@@ -75,7 +75,7 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
 
                         loader = DataLoader(dataset= data, batch_size=feature_setting.get_batch_size(), collate_fn=collate_features, sampler=SequentialSampler(data))
                         features = test_encoder(loader, model, device)
-                        error, loss, Y_prob, Y_hat= test_decoder(model, features, label, device, draw_map)
+                        error, loss, Y_prob, Y_hat= test_decoder(model, features, label, device, wsi, p, draw_map)
                         test_losses.append(loss)
                         error_class_wise[label_for_error_classs_wise] += error
                         counter_class_wise[label_for_error_classs_wise] += 1
@@ -85,9 +85,9 @@ def test_partial_model(model, n_classes, patients_test, feature_setting, draw_ma
     test_error_class_wise = np.array(error_class_wise, dtype=np.float32)
     test_counter_class_wise = np.array(counter_class_wise, dtype= np.float32)
     if json_path is not None:
-        save_it_losses(test_losses, json_path, 'test_losses')
-        save_it_losses(test_error_class_wise, json_path, 'test_error_class_wise')
-        save_it_losses(test_counter_class_wise, json_path, 'test_counter_class_wise')
+        save_it_losses(test_losses, json_path, f'test_losses_{mk_run}')
+        save_it_losses(test_error_class_wise, json_path, f'test_error_class_wise_{mk_run}')
+        save_it_losses(test_counter_class_wise, json_path, f'test_counter_class_wise_{mk_run}')
     sensitivity = (counter_class_wise[0] - error_class_wise[0]) / counter_class_wise[0]
     specificity = (counter_class_wise[1] - error_class_wise[1]) / counter_class_wise[1]
 

@@ -7,6 +7,7 @@ from datastructure.diagnosis import Diagnosis as Diagnosis
 from datastructure.patient import Patient as Patient
 import os
 import numpy as np
+import sys
 
 class Dataset(object):
     """
@@ -383,6 +384,7 @@ class Dataset(object):
 
             for i in range(n_in_class):
                 # Get patient with correct identifier
+
                 cur_p = [p for p in class_patients if p.get_identifier() == identifications[i]][0]
                 # Append to correct subset
                 if i < n_test:

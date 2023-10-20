@@ -1,3 +1,4 @@
+
 class ClassSetting(object):
     """ Class to hold parameters of classification problem
 

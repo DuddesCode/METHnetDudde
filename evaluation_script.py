@@ -11,54 +11,78 @@ import sys
 from arguments import setting
 from datastructure import dataset
 
+
 def create_folder_path(batch_size, mode, num_batches, epochs, runs):
+    """used to define a model folder to write to"""
     return f"{mode}_{batch_size}_{num_batches}_{epochs}_{runs}/"
 
 def fill_json(batch_size, num_batches, top_level_folder, mode, epochs, runs):
+    """used to create a json file that gets written into a directory"""
+    #get folder path
     folder_path = create_folder_path(batch_size, mode, num_batches, epochs, runs)
-    print(folder_path)
+    #create dict to convert to json
     temp_dict = {"batch_size": batch_size,"num_batches": num_batches,"mode": mode,"test_score_folder": top_level_folder+'/'+folder_path, 'epochs': epochs, 'runs':runs}
+    #convert dict to json
     json_string = json.dumps(temp_dict)
 
 
-
+    #check that the folder to write to exists
     if not os.path.isdir(top_level_folder):
         create_folder(top_level_folder)
-    
+    #create the specific folder
     create_folder(top_level_folder+'/'+folder_path)
 
+    #write json to folder
     with open(top_level_folder+'/'+folder_path+'setup.json', 'w') as outfile:
         outfile.write(json_string)
 
     return top_level_folder+'/'+folder_path
 
 def eval_loop():
-    #'hand_picked', 'random', 'attention'
+    #'hand_picked', 'solid', 'attention'
+    #defines batchsize
     batch_size = 50
-    mode_list = ['random']
-    num_batches = 0
-    epochs = 70
-    runs = 1
+    #defines modes to train with
+    mode_list = ['attention']
+    #defines initial number of batches 
+    num_batches = 15
+    #defines number of epochs
+    epochs = 200
+    #defines number of monte carlo runs
+    runs = 5
+    #contains the working directory
     work_dir = os.path.join(os.getcwd(), 'data')
     csv_file = work_dir + '/Patients.csv'
     data_dir = [work_dir + '/wsi_C']
-    num_batches_list = [ 0, 2, 15, 75]
+    #contains the number of batches to be e2e learned
+    num_batches_list = [0, 2, 15, 50]
     draw_map = False
 
-    np_losses = []
+    #create a folder with json for the initial modell
     folder = fill_json(batch_size, num_batches, os.getcwd()+'/tests', mode_list[0], epochs, runs)
 
+    #create an initial setting
     s = setting.Setting(data_dir, csv_file, work_dir, folder)
 
+    #create the dataset
     data = dataset.Dataset(s)
 
+    #create modell per defined mode
     for ele in mode_list:
-        for batch_num in num_batches_list:
-            folder = fill_json(batch_size, batch_num, os.getcwd()+'/tests', ele, epochs, runs)
-            s.reset_folder_path(folder)
-            s.get_data_setting().reset_folder_paths(s)
-            s.get_network_setting().reset_folder_path(s)
-            run_train_eval_mode(ele, draw_map, s, data, json_path=folder)
+        #create model per defined e2e batches
+        #
+            #create new subfolder
+        folder = fill_json(batch_size, num_batches, os.getcwd()+'/tests', ele, epochs, runs)
+        #set fodler paths to new ones
+        s.reset_folder_path(folder)
+        s.get_data_setting().reset_folder_paths(s)
+        s.get_network_setting().reset_folder_path(s)
+        #run train in evaluation mode
+        if ele == 'attention':
+            draw_map = True
+        else:
+            draw_map = False
+        run_train_eval_mode(ele, draw_map, s, data, json_path=folder)
         
     
     val_losses = []

@@ -6,9 +6,10 @@ import torch.optim as optim
 import numpy as np
 from torch.utils.data import SequentialSampler
 from torch.utils.data.dataloader import DataLoader
+from torchvision.utils import make_grid
 from torch.utils.data import Dataset
 import torch.nn as nn
-
+from matplotlib import pyplot as plt
 from models.rest_net_model_paral import resnet50_baseline_paral
 from models.restnet_custom import resnet50_baseline
 from models.model_Full import Partial_Net
@@ -92,6 +93,7 @@ class Patient_Dataset(Dataset):
         # Check if has three dimensions
         if len(np.shape(img)) == 3:
             img = np.expand_dims(img, axis=0)
+        
         # To torch tensor
         all_p = torch.from_numpy(img)
         
@@ -137,7 +139,7 @@ def create_cleaned_dataset(dataset, index):
         clean_dict_dataset = np.asarray(clean_dict_dataset)
         temp_marked = clean_dict_dataset[index]
         clean_dict_dataset = np.delete(clean_dict_dataset, index)
-
+        np.random.shuffle(clean_dict_dataset)
         clean_dict_dataset = np.concatenate((temp_marked, clean_dict_dataset))
         clean_dict_dataset = clean_dict_dataset.tolist()
 
@@ -305,12 +307,12 @@ def partial_training(train_patients, validation_patients, setting, fold, selecti
     # Get Encoder - default pretrained ResNet50
     param_Encoder = resnet50_baseline(pretrained=True)
     param_Encoder.train()
-    param_Encoder = nn.DataParallel(param_Encoder, device_ids=[0,1,2,3])
     #param_Encoder = nn.DataParallel(param_Encoder, device_ids=[0,1,2,3])
+    param_Encoder = nn.DataParallel(param_Encoder, device_ids=[0,1,2,3])
     # Get Decoder
     param_Decoder = Attention_MB(setting)
     param_Decoder.train()
-    # get Partial Model
+    # get Partial Model(checked that models are the same as input)
     model = Partial_Net(encoder=param_Encoder, decoder=param_Decoder)
     # To GPU if available
     device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
@@ -319,7 +321,7 @@ def partial_training(train_patients, validation_patients, setting, fold, selecti
     # Loss function
     loss_fn = torch.nn.CrossEntropyLoss()
     #define optimizer
-    optimizer = optim.Adam(model.parameters(), lr=1e-4, weight_decay=1e-5)
+    optimizer = optim.Adam(filter(lambda p: p.requires_grad, model.parameters()), lr=1e-4, weight_decay=1e-5)
     # Early stopping checker
     early_stopping = EarlyStopping(patience=setting.get_network_setting().get_patience(), stop_epoch=setting.get_network_setting().get_stop_epoch(), verbose=setting.get_network_setting().get_verbose())
     # Folder to save model parameters to
@@ -343,15 +345,17 @@ def partial_training(train_patients, validation_patients, setting, fold, selecti
 
     #enc_pre_train = copy.deepcopy(model.getEncoder()).state_dict()
     for epoch in range(setting.get_network_setting().get_epochs()):
+        #losses and loss count are set to zero each epoch
         running_loss = 0.0
         loss_count = 0
+        #used for epoch times
         epoch_timer_start = timer()
-        model.getEncoder().train()
+        #used to set the model to train at the start of each epoch !works!
+        model.getEncoder().eval()
         model.getDecoder().train()
-        model.train()
 
         min_n = min([len(train_patients[i]) for i in range(len(train_patients))])
-
+        
         patients_train = []
         # Iterate over classes
         for patients in train_patients:
@@ -375,43 +379,79 @@ def partial_training(train_patients, validation_patients, setting, fold, selecti
             for i in range(min_n):
                 patients_validation.append(patients[indices[i]])
         
-        
+        #used to shuffle the train dataset
         pat_train_temp = []
         patients_train_indices = np.arange(0, len(patients_train))
         np.random.shuffle(patients_train_indices)
+        #start indexsort to get the shuffled patients !works!
         for ele in patients_train_indices:
             pat_train_temp.append(patients_train[ele])
-        print(patients_train)
-        print(pat_train_temp)
         # Iterate patient classes
         for p in pat_train_temp:
-            # Iterate image properties
+            # get the label from diagnose !works!
             label = p.get_diagnosis().get_label()
+            #set label to device and to torch.Longtensor !works! returns correct label
             label = set_label(label, device)
-            #print(p.get_wsis())
+
             for wp in p.get_wsis():
                 # Iterate WSIs with image property
                 for wsi in wp:
-                    wsi_list.append(wsi)
                     # Iterate Tile properties
                     for i in range(len(wsi.get_tile_properties())):
                         # If no tiles then nothing to be done
                         if len(wsi.get_tiles_list()) != 0:
-                            #trains the encoder for one wsi property
-                            features_wsi, num_batches_marked, time_spent_img , time_spent_ds= train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, model, json_path=json_path)
+                            #trains the encoder for one wsi property !features are correctly constructed and concatenated!
+                            features_wsi, num_batches_marked, time_spent_img , time_spent_ds , feature_value= train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, model, json_path=json_path)
                             if num_batches_marked != 0:
                                 features_wsi.retain_grad()
+                            #used to save time spent reading the images
                             time_spent_imgs.append(time_spent_img)
                             time_spent_dataset.append(time_spent_ds)
                             #sets the features of a wsi property
-                        set_features(features_wsi, wsi, i)
+                        if selection_mode == 'attention':
+                            set_features(features_wsi, wsi, i)
                     #train the decoder
                     loss_wsi, error = train_decoder(model, loss_fn, features_wsi,  optimizer, setting, device, label, p, wsi, draw_map=draw_map)
+                    print(wsi.get_tiles_list()[0][0].current_att_value)
+                    print(len(wsi.get_tiles_list()[i][0].get_attention_values()))
                     #enc_post_train = model.getEncoder().to(device).state_dict()
 
                     #compare_models(enc_pre_train, enc_post_train)
                     running_loss += loss_wsi
                     loss_count += 1
+
+        if selection_mode == 'attention':
+            full_train_list = []
+            for ele in train_patients:
+                full_train_list += ele
+            
+            for p in full_train_list:
+                # get the label from diagnose !works!
+                label = p.get_diagnosis().get_label()
+                #set label to device and to torch.Longtensor !works! returns correct label
+                label = set_label(label, device)
+
+                for wp in p.get_wsis():
+                    # Iterate WSIs with image property
+                    for wsi in wp:
+                        print(wsi)
+                        # Iterate Tile properties
+                        for i in range(len(wsi.get_tile_properties())):
+                            # If no tiles then nothing to be done
+                            if len(wsi.get_tiles_list()) != 0:
+                                print(wsi.get_tiles_list()[0][0].current_att_value)
+                                print(len(wsi.get_tiles_list()[i][0].get_attention_values()))
+                                if wsi.get_tiles_list()[i][0].current_att_value is None or len(wsi.get_tiles_list()[i][0].get_attention_values()) != epoch+1:
+                                    wsi.load_wsi()
+                                    data, time_placeholder = create_dataset(wsi, i)
+                                    loader = DataLoader(dataset= data, batch_size=feature_setting.get_batch_size(), collate_fn=collate_features, sampler=SequentialSampler(data))
+                                    #compute features    
+                                    features = test_encoder(loader, model, device)
+                                    set_features(features, wsi, i)
+                                    #loss_wsi, error = train_decoder(model, loss_fn, features,  optimizer, setting, device, label, p, wsi, draw_map=draw_map)
+                                    error, loss, Y_prob, Y_hat = test_decoder(model, features, label, device, wsi, p, True)
+                                    wsi.close_wsi()
+            
 
         running_loss = running_loss / loss_count
         train_losses.append(running_loss)
@@ -447,18 +487,17 @@ def partial_training(train_patients, validation_patients, setting, fold, selecti
     time_spent_img = np.array(time_spent_imgs, dtype = np.float32)
     time_spent_dataset= np.array(time_spent_dataset, dtype = np.float32)
     if json_path is not None:
-        save_it_losses(train_losses, json_path, 'train_losses')
-        save_it_losses(epoch_timelist, json_path, 'epoch_time')
-        save_it_losses(val_losses, json_path, 'val_losses')
-        save_it_losses(time_spent_imgs, json_path, 'time_spent_img')
-        save_it_losses(time_spent_dataset, json_path, 'time_spent_dataset')
-        save_it_losses(acc_valid, json_path, 'acc_valid')
-        save_it_losses(sens_valid, json_path, 'sens_valid')
-        save_it_losses(spec_valid, json_path, 'spec_valid')
-        save_it_losses(logged_pos_val, json_path, 'logged_pos_val')
-        save_it_losses(logged_neg_val, json_path, 'logged_neg_val')
+        save_it_losses(train_losses, json_path, f'train_losses_{fold}')
+        save_it_losses(epoch_timelist, json_path, f'epoch_time_{fold}')
+        save_it_losses(val_losses, json_path, f'val_losses_{fold}')
+        save_it_losses(time_spent_imgs, json_path, f'time_spent_img_{fold}')
+        save_it_losses(time_spent_dataset, json_path, f'time_spent_dataset_{fold}')
+        save_it_losses(acc_valid, json_path, f'acc_valid_{fold}')
+        save_it_losses(sens_valid, json_path, f'sens_valid_{fold}')
+        save_it_losses(spec_valid, json_path, f'spec_valid_{fold}')
+        save_it_losses(logged_pos_val, json_path, f'logged_pos_val_{fold}')
+        save_it_losses(logged_neg_val, json_path, f'logged_neg_val_{fold}')
 
-    return num_batches_marked
 
 def save_it_losses(it_losses, json_path, file_name):
     import json
@@ -521,7 +560,6 @@ def train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, mode
     marked_output : [torch.Tensor]
         contains a list of torch.Tensor that contain the marked outputs
     """    
-    # Open WSI
     wsi.load_wsi()
     #select the selection mode according to the settings
     selection = select_selection_mode(selection_mode, feature_setting, wsi, epoch, json_path=json_path)
@@ -534,14 +572,11 @@ def train_stage_one(wsi, i, feature_setting, selection_mode, epoch, device, mode
     time_spent_ds = timer_spent_ds_stop-timer_spent_ds_start
     # Create Dataloader
     loader = DataLoader(dataset=data, batch_size=feature_setting.get_batch_size(), collate_fn=collate_features, sampler=SequentialSampler(data))
-    #used to determine whether a gradient was computed for a marked output and None for an unmarked
+
     #iterates per batch in the Dataloader
-    features_wsi = train_encoder(loader, model, device, selection.get_marked_batches())
-    #reset tiles
-    #close WSI
+    features_wsi, feature_value = train_encoder(loader, model, device, selection.get_marked_batches(), selection_mode)
     wsi.close_wsi()
-    #retain the gradients for proofs
-    return features_wsi, selection.get_marked_batches(), time_spent_img, time_spent_ds
+    return features_wsi, selection.get_marked_batches(), time_spent_img, time_spent_ds, feature_value
 
 
 def validate_partial_net_epoch(epoch, model, early_stopping, patients_val, feature_setting, n_classes, ckpt_name, json_path=None):
@@ -576,7 +611,6 @@ def validate_partial_net_epoch(epoch, model, early_stopping, patients_val, featu
     #set the model to evaluation mode
     model.getDecoder().eval()
     model.getEncoder().eval()
-    model.eval()
     acc_logger = Accuracy_Logger(n_classes=n_classes)
     #define the validation loss and error
     val_loss = 0.
@@ -606,7 +640,8 @@ def validate_partial_net_epoch(epoch, model, early_stopping, patients_val, featu
                             #compute features    
                             features = test_encoder(loader, model, device)
                             #compute error and loss of decoder
-                            error, loss, Y_prob, Y_hat = test_decoder(model, features, label, device, False)
+                            print(label)
+                            error, loss, Y_prob, Y_hat = test_decoder(model, features, label, device, wsi, p, False)
                             # pass error and loss to parent errors
                             print('error')
                             print(error)
@@ -628,6 +663,7 @@ def validate_partial_net_epoch(epoch, model, early_stopping, patients_val, featu
 
                             error_class_wise[label] += error
                             counter_class_wise[label] += 1
+                            label = set_label(label, device)
                             
     val_loss = val_loss / val_losses
     # Compute Early stopping
@@ -644,7 +680,23 @@ def validate_partial_net_epoch(epoch, model, early_stopping, patients_val, featu
 
     return False, val_loss, balanced_accuracy, sensitivity, specificity, acc_logger
 
-def train_encoder(dataloader, model, device, number_markings):
+"""import torch
+        import torchvision
+        import torchvision.transforms as T
+        import matplotlib.pyplot as plt
+        from PIL import Image
+        imagelist = []
+        for ele in batch:
+            transform = T.ToPILImage()
+            img = transform(ele)
+            imagelist.append(img)
+        for i, img in enumerate(imagelist):
+            plt.subplot(10,5,i+1)
+            plt.imshow(img)
+        plt.show()
+        sys.exit()"""
+
+def train_encoder(dataloader, model, device, number_markings, selection_mode):
     """trains the encoder for one epoch
 
     Parameters
@@ -676,8 +728,12 @@ def train_encoder(dataloader, model, device, number_markings):
     i = 1
     batchlist = []
     features_wsi = None
+    feature_sum = 0
     for batch in tqdm(dataloader):
+        
+        
         if i<=number_markings:
+            model.getEncoder().train()
             batchlist.append(batch)
             batch = batch.to(device, non_blocking=True)
             # Compute features
@@ -685,6 +741,10 @@ def train_encoder(dataloader, model, device, number_markings):
 
             features = features.to('cuda:1', non_blocking=True)
         else:
+            
+            if number_markings != 0 and selection_mode is not 'attention':
+                return features_wsi.to('cuda:0', non_blocking=True), feature_sum
+            model.getEncoder().eval()
             with torch.no_grad():
                 batchlist.append(batch)
                 batch = batch.to(device, non_blocking=True)
@@ -692,7 +752,7 @@ def train_encoder(dataloader, model, device, number_markings):
                 # Compute features
                 features = model.getEncoder()(batch)
                 features = features.to('cuda:1', non_blocking=True)
-        
+        feature_sum += torch.sum(features)
         #control block to ckeck that no duplikates are created
         if i == 1:
             features_wsi = features
@@ -705,7 +765,7 @@ def train_encoder(dataloader, model, device, number_markings):
         #increments i
         i += 1
 
-    return features_wsi.to('cuda:0', non_blocking=True)
+    return features_wsi.to('cuda:0', non_blocking=True), feature_sum
 
 def train_encoder_parallel(dataloader, model, device, number_markings):
     """trains the encoder for one epoch
@@ -893,7 +953,7 @@ def test_encoder(dataloader, model, device):
     
     return features_wsi
 
-def test_decoder(model, features, label, device, draw_map=True):
+def test_decoder(model, features, label, device, wsi, patient, draw_map=True):
     """tests the decoder with the given features and label
 
     Parameters
@@ -917,9 +977,11 @@ def test_decoder(model, features, label, device, draw_map=True):
     
     #set loss funct
     loss_fn = torch.nn.CrossEntropyLoss()
-
     #convert label to LongTensor as specified by Decoder Modell
-    label = label.type(torch.LongTensor)
+    if type(label) is int:
+        label = set_label(label, device)
+    else:
+        label = label.type(torch.LongTensor)
     
     #shift features and label to specified device
     features, label = features.to(device), label.to(device)
@@ -938,5 +1000,15 @@ def test_decoder(model, features, label, device, draw_map=True):
         #compute loss
         loss = loss_fn(logits, label)
         loss = loss.item()
+    
+    if draw_map:
+        if check_feat_dir_contains_files(wsi):
+            features, keys = patient.get_features(wsi)
+            A = A[Y_hat]
+            A = A.view(-1, 1).cpu().detach().numpy()
+            # Get tile keys in attention map
+            if draw_map:
+                # Save attention map
+                patient.set_map(A, keys, wsi)
 
     return error, loss, Y_prob, Y_hat

@@ -238,7 +238,6 @@ class WholeSlideImage(object):
         self.image_property = image_property
         # Tile properties of Tiles to generate
         self.tile_properties = self.setting.get_data_setting().get_tile_properties()
-        print(self.tile_properties)
         # Data Folder
         self.data_folder = data_folder
 

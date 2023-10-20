@@ -77,7 +77,8 @@ class Tile(object):
         self.attention_values = []
         # Relative attention values for this tile
         self.attention_values_relative = []
-        
+        #used for current att value MD
+        self.current_att_value = None
         #used for selection for partial training MD
         self.mark = False
 
@@ -144,6 +145,7 @@ class Tile(object):
             Additional attention value
         """
         self.attention_values.append(value)
+        self.current_att_value = value
 
     def add_attention_value_relative(self, value):
         """ Append a value to attention value relative attribute

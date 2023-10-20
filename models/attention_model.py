@@ -12,6 +12,7 @@ import torch.nn.functional as F
 import numpy as np
 from torch.nn.modules.batchnorm import BatchNorm1d
 
+import sys
 
 def init_weights(module):
     for m in module.modules():
@@ -146,5 +147,8 @@ class Attention_MB(Attention_SB):
 
         Y_hat = torch.topk(logits, 1, dim=1)[1]
         Y_prob = F.softmax(logits, dim=1)
+
+        print(logits)
+        
 
         return logits, Y_prob, Y_hat, A_raw

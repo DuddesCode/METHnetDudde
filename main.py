@@ -4,7 +4,7 @@ import string
 import arguments.setting as setting
 import datastructure.dataset as dataset
 import os
-
+import pickle
 from learning.partial_training_main_funct import partial_training, save_it_losses
 from learning.testing_partial import test_partial
 from learning.testing_parallelism import partial_training_parallel
@@ -52,6 +52,9 @@ def dataset_saver(patients_test, patients_val, patients_train):
     print(last_value)
     print('max batches')
     print(last_value/128)
+    with open('wsi_dataCres.dat', 'wb') as outfile:
+        pickle.dump(wsi_tile_dict, outfile, protocol=pickle.HIGHEST_PROTOCOL)
+        sys.exit()
     logscale = np.logspace(2.0, 212.0, num=7, dtype=int)
     print(logscale)
     plt.bar(*zip(*wsi_tile_dict.items()))
@@ -78,6 +81,7 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
     draw_map : bool
         True if want to save attention maps
     """
+    #used for monte carlo runs
     if runs_start >= runs:
         return 
     import numpy as np
@@ -94,6 +98,7 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
     runtimes = []
     # Iterate Monte-carlo
     for k in range(runs_start, runs):
+        #used to time the run
         runtimer_start = timer()
         # Set split
         data.set_fold(k)
@@ -101,16 +106,18 @@ def run(data, setting, selection_mode, train=False, features_only=False, runs_st
         #dataset_saver(data.get_test_set(), data.get_validation_set(), data.get_train_set())
         # Train model
         #if train:
-        marked_batches = partial_training(train_patients = data.get_train_set(), validation_patients=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode, draw_map=draw_map, json_path = json_path)
+        partial_training(train_patients = data.get_train_set(), validation_patients=data.get_validation_set(), setting = setting, fold = k, selection_mode = selection_mode, draw_map=draw_map, json_path = json_path)
         # Test model
         balanced_accuracy, sensitivity, specificity = test_partial(data.get_test_set(), k, setting, draw_map=draw_map, json_path=json_path)
+        #used to time the run
         runtimer_stop = timer()
+        #saves runtime
         runtimes.append(runtimer_stop-runtimer_start)
         print('SPECIFIC post test partial')
-        print(specificity)
         balanced_accuracies.append(balanced_accuracy)
         sensitivities.append(sensitivity)
         specificities.append(specificity)
+    #save all runtimes to npy
     runtimes = np.array(runtimes, dtype=np.float32)
     save_it_losses(runtimes, json_path, 'runtime')
 

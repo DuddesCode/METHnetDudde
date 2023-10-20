@@ -125,8 +125,16 @@ class Selection(ABC):
         :param tile_list: contains Tile objects
         :type tile_list: list
         """
+        
         if not self.number_of_tiles < len(tile_list):
             self.fit_to_tile_num(len(tile_list))
+
+    def batchsize_check(self):
+        if len(self.wsi.get_tiles_list()[0])< self.batch_size:
+            self.marked_batches = 1
+            return False
+        else:
+            return True
 
     def fit_to_tile_num(self, tiles):
         """fits the number of marked_batches to the number of tiles in param tiles
@@ -177,7 +185,9 @@ class RandomSelection(Selection):
         print(indices_array)
         randomised_tile_list = indices_array[0:self.number_of_tiles-1:1]
         self.reset_to_initial_batch_count()
-
+        if len(tile_list) < self.batch_size:
+            self.set_marked_batches(0)
+            return None
         return randomised_tile_list  
 
 class SolidSelection(Selection):
@@ -204,9 +214,16 @@ class SolidSelection(Selection):
         """changes the first self.number_of_tiles of a wsi to marked"""
         #iterate over tilelists
         print(self.get_epoch())
+        rng = np.random.default_rng()
+        
+
         if self.wsi.get_solid_selection_list(0) == []:
             print('worked')
+            
             tile_list = self.wsi.get_tiles_list()[i]
+            if len(tile_list) < self.batch_size:
+                self.set_marked_batches(1)
+                return None
             self.tile_number_check(tile_list)
             indices_array = np.arange(0, len(tile_list)-1, 1, dtype=int)
             print(indices_array)
@@ -220,8 +237,10 @@ class SolidSelection(Selection):
         else:
             final_indices = self.wsi.get_solid_selection_list(i)
 
+        rng.shuffle(final_indices)
+
         return final_indices
-    
+
 class HandPickedSelection(Selection):
     """Marks tiles that are within an area marked by a specialist
 
@@ -250,11 +269,18 @@ class HandPickedSelection(Selection):
         """ 
         #check if enough tiles in the marked region to satisfy the requested batch size
         tile_list_final = []
+        rng = np.random.default_rng()
         if 0 <= (len(self.wsi.get_inside()[0]) - self.number_of_tiles):
             for i in range(self.marked_batches * self.batch_size):
                 tile_list_final.append(self.wsi.tiles_inside[0][i])
         else:
-            tile_list = self.wsi.tiles_inside[0]
+            self.tile_number_check(self.wsi.tiles_inside[0])
+            for i in range(self.marked_batches * self.batch_size):               
+                tile_list_final.append(self.wsi.tiles_inside[0][i])
+            if len(self.wsi.tiles_inside[0]) < self.batch_size:
+                self.set_marked_batches(0)
+                return None    
+            """tile_list = self.wsi.tiles_inside[0]
             outside_list = self.wsi.tiles_outside[0]
             i = 0
             #check if enough tiles overall to satisfy the requested batch size
@@ -267,7 +293,7 @@ class HandPickedSelection(Selection):
             while len(tile_list) != self.number_of_tiles:
                 tile_list.append(outside_list[i])
                 i += 1
-            tile_list_final = tile_list
+            tile_list_final = tile_list"""
         #get numpy index list of overall tiles
         wsi_tile_list = self.wsi.get_tiles_list()[idx]
         wsi_tile_list = np.array(wsi_tile_list)
@@ -277,6 +303,7 @@ class HandPickedSelection(Selection):
             index_list.append(np.where(wsi_tile_list == ele)[0][0])
         #sort tile list to get indexes
         index_list = np.array(index_list)
+        rng.shuffle(index_list)
         return index_list
             
             
@@ -313,10 +340,14 @@ class AttentionSelection(Selection):
 
         In the first epoch the tiles are marked at random
         After the first epoch the tiles are marked according to the curretn attention map of the wsi
-        """                
+        """    
+        rng = np.random.default_rng()            
         if self.get_epoch() != 0:
             #iterate over tilelists
             tile_list = self.wsi.get_tiles_list()[i]
+            if len(tile_list) < self.batch_size:
+                self.set_marked_batches(0)
+                return None
             temp_tile_list = sorted(tile_list, key= lambda tile: tile.get_attention_values()[self.epoch - 1])
             #check if number of tiles are fitted to tile list
             self.tile_number_check(temp_tile_list)
@@ -328,15 +359,18 @@ class AttentionSelection(Selection):
             for ele in temp_tile_list:
                 index_tile_list.append(np.where(tile_list == ele)[0][0])
             index_tile_list = np.array(index_tile_list)
+            rng.shuffle(index_tile_list)
             self.reset_to_initial_batch_count()
         else:
             #iterate tilelists of a wsi
             print('worked')
             tile_list = self.wsi.get_tiles_list()[i]
+            if len(tile_list) < self.batch_size:
+                self.set_marked_batches(0)
+                return None
             self.tile_number_check(tile_list)
             indices_array = np.arange(0, len(tile_list)-1, 1, dtype=int)
             print(indices_array)
-            rng = np.random.default_rng()
             rng.shuffle(indices_array)
             print(indices_array)
             index_tile_list = indices_array[0:self.number_of_tiles-1:1]
